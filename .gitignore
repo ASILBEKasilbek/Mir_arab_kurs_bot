@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+env/
+venv/
+ENV/
+*.env
+*.sqlite3
+*.db
+
+# VSCode
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Logs
+*.log
+
+# Byte-compiled files
+*.pyc
+
+# PyInstaller
+*.spec
+
+# mypy
+.mypy_cache/
+
+# pytest
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+
+# Backup files
+*.bak
+*.swp
+*.swo
+*~
+
+# Idea/JetBrains IDEs
+.idea/
+
+# Local database
+*.db
+*.sqlite
+
+# System files
+Thumbs.db
+ehthumbs.db

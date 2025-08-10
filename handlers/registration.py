@@ -18,6 +18,7 @@ class Registration(StatesGroup):
     gender = State()
     phone = State()
     quran_course = State()
+    final_confirm = State()
 
 
 def register_handlers(dp):
@@ -121,24 +122,50 @@ def register_handlers(dp):
         await message.answer("Qaysi Qur'on kursida o‘qiyapsiz?", reply_markup=quran_kb)
         await state.set_state(Registration.quran_course)
 
-    # Qur’on kursi
+    # Qur’on kursi tanlash
     @dp.callback_query(Registration.quran_course, F.data.startswith("course_"))
     async def choose_course(callback: CallbackQuery, state: FSMContext):
         course = callback.data.replace("course_", "")
         await state.update_data(quran_course=course)
 
         data = await state.get_data()
-        save_user(data)
 
-        await callback.message.answer(
-            f"✅ Registratsiya yakunlandi!\n"
+        # Ma’lumotlarni ko‘rsatish
+        confirm_text = (
+            f"📋 Ma’lumotlaringiz:\n"
             f"Ism: {data['first_name']}\n"
             f"Familiya: {data['last_name']}\n"
             f"Yosh: {data['age']}\n"
             f"Jinsi: {data['gender']}\n"
             f"Telefon: {data['phone']}\n"
-            f"Kurs: {data['quran_course']}",
-            reply_markup=None
+            f"Kurs: {data['quran_course']}\n\n"
+            f"Ma’lumotlar to‘g‘rimi?"
         )
+
+        confirm_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Ha", callback_data="confirm_yes"),
+             InlineKeyboardButton(text="❌ Yo‘q", callback_data="confirm_no")]
+        ])
+
+        await callback.message.answer(confirm_text, reply_markup=confirm_kb)
+        await state.set_state(Registration.final_confirm)
+        await callback.answer()
+
+    # Yakuniy tasdiqlash
+    @dp.callback_query(Registration.final_confirm, F.data.startswith("confirm_"))
+    async def final_confirmation(callback: CallbackQuery, state: FSMContext):
+        choice = callback.data.replace("confirm_", "")
+
+        if choice == "no":
+            await callback.message.answer("❌ Registratsiya bekor qilindi. Qaytadan boshlang: /start")
+            await state.clear()
+            await callback.answer("Bekor qilindi")
+            return
+
+        # Ha bo‘lsa saqlash
+        data = await state.get_data()
+        save_user(data)
+
+        await callback.message.answer("✅ Registratsiya yakunlandi! Rahmat.")
         await state.clear()
         await callback.answer("Saqlandi ✅")

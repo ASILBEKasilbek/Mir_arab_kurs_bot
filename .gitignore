@@ -14,7 +14,7 @@ ENV/
 *.env
 *.sqlite3
 *.db
-
+.env
 # VSCode
 .vscode/
 

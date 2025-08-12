@@ -60,3 +60,5 @@ coverage.xml
 # System files
 Thumbs.db
 ehthumbs.db
+.env
+users.db

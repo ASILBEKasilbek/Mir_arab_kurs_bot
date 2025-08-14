@@ -1,41 +1,26 @@
 from aiogram import F
 from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from database import get_user_by_tg, create_payment
 from config import ADMIN_IDS
 
+class PaymentStates(StatesGroup):
+    await_proof = State()
+
 async def register_payment_handlers(dp):
+
+    # 1. Tugma bosilganda chek so'rash
     @dp.callback_query(F.data == "pay_now")
-    async def start_payment(callback: CallbackQuery, state: FSMContext):
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💳 Bank orqali", callback_data="method_bank")],
-            [InlineKeyboardButton(text="📱 Payme", callback_data="method_payme")],
-            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_pay")]
-        ])
-        await callback.message.answer("To‘lov usulini tanlang:", reply_markup=kb)
+    async def ask_payment_proof(callback: CallbackQuery, state: FSMContext):
+        await callback.message.answer("📷 To‘lov chekining suratini yuboring.")
+        await state.set_state(PaymentStates.await_proof)  # State to'g'ri belgilanadi
         await callback.answer()
 
-    @dp.callback_query(F.data.startswith("method_"))
-    async def ask_payment_amount(callback: CallbackQuery, state: FSMContext):
-        method = callback.data.replace("method_", "")
-        await state.update_data(method=method)
-        await callback.message.answer("💰 To‘lov miqdorini yozing (so‘mda):")
-        await state.set_state("await_amount")
-        await callback.answer()
-
-    @dp.message(F.state == "await_amount")
-    async def get_amount(message: Message, state: FSMContext):
-        if not message.text.isdigit():
-            await message.answer("Iltimos, faqat raqam kiriting.")
-            return
-        amount = int(message.text)
-        await state.update_data(amount=amount)
-        await message.answer("📷 Endi to‘lov chekining suratini yuboring.")
-        await state.set_state("await_proof")
-
-    @dp.message(F.state == "await_proof", F.content_type == ContentType.PHOTO)
+    # 2. Rasm kelganda avtomatik adminga yuborish
+    @dp.message(PaymentStates.await_proof, F.content_type == ContentType.PHOTO)
     async def get_payment_proof(message: Message, state: FSMContext):
-        data = await state.get_data()
+        print(90)
         tg_id = message.from_user.id
         user = get_user_by_tg(tg_id)
         if not user:
@@ -43,16 +28,19 @@ async def register_payment_handlers(dp):
             return
 
         file_id = message.photo[-1].file_id
+
+        # Bazaga saqlash
         payment_id = create_payment(
             user_id=user[0],
-            amount=data["amount"],
-            method=data["method"],
+            amount=0,  # Miqdor so'ralmaydi
+            method="",
             proof_file_id=file_id
         )
-        await message.answer("✅ To‘lov qabul qilindi. Admin tasdiqlaguncha kuting.")
+
+        await message.answer("✅ Chekingiz qabul qilindi. Admin tasdiqlaguncha kuting.")
         await state.clear()
 
-        # Adminlarga xabar
+        # Adminga yuborish
         for admin in ADMIN_IDS:
             try:
                 kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -63,11 +51,9 @@ async def register_payment_handlers(dp):
                     admin,
                     photo=file_id,
                     caption=(
-                        f"💵 Yangi to‘lov!\n"
+                        f"📥 Yangi chek!\n"
                         f"ID: {payment_id}\n"
                         f"Foydalanuvchi: {user[2]} {user[3]}\n"
-                        f"Summa: {data['amount']:,} so‘m\n"
-                        f"Usul: {data['method']}\n"
                         f"Tg_id: {tg_id}"
                     ),
                     reply_markup=kb

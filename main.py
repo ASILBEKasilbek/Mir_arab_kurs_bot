@@ -35,7 +35,7 @@ async def main() -> None:
         dp = Dispatcher(storage=MemoryStorage())
 
         reg_register(dp)
-        register_payment_handlers(dp)  # Assuming synchronous; use await if async
+        await register_payment_handlers(dp)  # Assuming synchronous; use await if async
         register_admin_handlers(dp)
         await set_default_commands(bot)
 

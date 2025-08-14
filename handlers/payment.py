@@ -1,50 +1,76 @@
 from aiogram import F
-from aiogram.types import Message, ContentType, ReplyKeyboardRemove
+from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
-from database import get_user_by_tg, create_payment, update_user_field
+from database import get_user_by_tg, create_payment
 from config import ADMIN_IDS
 
-# Foydalanuvchi to'lovni yuboradi: summa va skrin (file). Oddiy variant:
 async def register_payment_handlers(dp):
-    @dp.message(F.text.startswith("/pay"))
-    async def pay_command(message: Message):
-        # format: /pay 50000 yoki /pay
-        parts = message.text.split()
-        if len(parts) >= 2:
-            amount = parts[1]
-            await message.reply("Iltimos, toʻlov chekining suratini yuboring (photo) va agar mavjud bo'lsa usulni yozing.")
-            # set state optionally
-        else:
-            await message.reply("Toʻlov miqdorini yozing, misol: /pay 50000")
+    @dp.callback_query(F.data == "pay_now")
+    async def start_payment(callback: CallbackQuery, state: FSMContext):
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Bank orqali", callback_data="method_bank")],
+            [InlineKeyboardButton(text="📱 Payme", callback_data="method_payme")],
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_pay")]
+        ])
+        await callback.message.answer("To‘lov usulini tanlang:", reply_markup=kb)
+        await callback.answer()
 
-    # Photo as proof
-    @dp.message(F.content_type == ContentType.PHOTO)
-    async def photo_payment(message: Message):
+    @dp.callback_query(F.data.startswith("method_"))
+    async def ask_payment_amount(callback: CallbackQuery, state: FSMContext):
+        method = callback.data.replace("method_", "")
+        await state.update_data(method=method)
+        await callback.message.answer("💰 To‘lov miqdorini yozing (so‘mda):")
+        await state.set_state("await_amount")
+        await callback.answer()
+
+    @dp.message(F.state == "await_amount")
+    async def get_amount(message: Message, state: FSMContext):
+        if not message.text.isdigit():
+            await message.answer("Iltimos, faqat raqam kiriting.")
+            return
+        amount = int(message.text)
+        await state.update_data(amount=amount)
+        await message.answer("📷 Endi to‘lov chekining suratini yuboring.")
+        await state.set_state("await_proof")
+
+    @dp.message(F.state == "await_proof", F.content_type == ContentType.PHOTO)
+    async def get_payment_proof(message: Message, state: FSMContext):
+        data = await state.get_data()
         tg_id = message.from_user.id
         user = get_user_by_tg(tg_id)
         if not user:
-            await message.reply("Siz ro'yxatdan o'tmagansiz. Avval /start bilan ro'yxatdan o'ting.")
+            await message.answer("❌ Siz ro'yxatdan o'tmagansiz. Avval /start bilan ro'yxatdan o'ting.")
             return
 
-        # limit fayl hajmini tekshirish mumkin (telegram returns file_id)
         file_id = message.photo[-1].file_id
-        # optional: parse caption for amount
-        caption = message.caption or ""
-        amount = None
-        for token in caption.split():
-            if token.replace(".", "").isdigit():
-                amount = float(token)
-                break
-        # default amount (admin may set)
-        amount = amount or 0.0
+        payment_id = create_payment(
+            user_id=user[0],
+            amount=data["amount"],
+            method=data["method"],
+            proof_file_id=file_id
+        )
+        await message.answer("✅ To‘lov qabul qilindi. Admin tasdiqlaguncha kuting.")
+        await state.clear()
 
-        payment_id = create_payment(user_id=user[0], amount=amount, method="bank_transfer", proof_file_id=file_id)
-        await message.reply("To'lov proof qabul qilindi. Admin tasdiqlaguncha kuting. Sizga xabar beramiz.", reply_markup=ReplyKeyboardRemove())
-
-        # notify admins
+        # Adminlarga xabar
         for admin in ADMIN_IDS:
             try:
-                await dp.bot.send_photo(admin, photo=file_id,
-                    caption=f"Yangi to'lov (ID: {payment_id})\nFoydalanuvchi: {user[2]} {user[3]}\nSumma: {amount}\nUser_id: {user[0]}")
+                kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_{payment_id}")],
+                    [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{payment_id}")]
+                ])
+                await dp.bot.send_photo(
+                    admin,
+                    photo=file_id,
+                    caption=(
+                        f"💵 Yangi to‘lov!\n"
+                        f"ID: {payment_id}\n"
+                        f"Foydalanuvchi: {user[2]} {user[3]}\n"
+                        f"Summa: {data['amount']:,} so‘m\n"
+                        f"Usul: {data['method']}\n"
+                        f"Tg_id: {tg_id}"
+                    ),
+                    reply_markup=kb
+                )
             except Exception as e:
                 print("Adminga yuborishda xato:", e)

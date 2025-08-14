@@ -1,0 +1,36 @@
+{
+  "uz": {
+    "choose_language": "Tilni tanlang:",
+    "register_prompt": "📋 Registratsiya qilasizmi?",
+    "yes": "✅ Ha",
+    "no": "❌ Yo‘q",
+    "enter_first_name": "Ismingizni kiriting:",
+    "enter_last_name": "Familiyangizni kiriting:",
+    "enter_age": "Yoshingizni kiriting:",
+    "invalid_age": "Iltimos, to‘g‘ri yoshni kiriting (1-150 oraliqda raqam):",
+    "choose_gender": "Jinsingizni tanlang:",
+    "enter_phone": "Telefon raqamingizni yuboring yoki yozing (masalan: +998901234567):",
+    "invalid_phone": "Iltimos, to‘g‘ri telefon raqamini kiriting (masalan: +998901234567):",
+    "choose_course": "Qaysi Qur'on kursida o‘qiyapsiz?",
+    "confirm_data": "📋 Ma’lumotlaringiz:\nIsm: {first_name}\nFamiliya: {last_name}\nYosh: {age}\nJinsi: {gender}\nTelefon: {phone}\nKurs: {course}\n\nMa’lumotlar to‘g‘rimi?",
+    "registration_canceled": "❌ Registratsiya bekor qilindi. Qaytadan boshlang: /start",
+    "registration_completed": "✅ Registratsiya yakunlandi! Rahmat."
+  },
+  "ru": {
+    "choose_language": "Выберите язык:",
+    "register_prompt": "📋 Хотите пройти регистрацию?",
+    "yes": "✅ Да",
+    "no": "❌ Нет",
+    "enter_first_name": "Введите ваше имя:",
+    "enter_last_name": "Введите вашу фамилию:",
+    "enter_age": "Введите ваш возраст:",
+    "invalid_age": "Пожалуйста, введите корректный возраст (число от 1 до 150):",
+    "choose_gender": "Выберите ваш пол:",
+    "enter_phone": "Отправьте или введите ваш номер телефона (например: +998901234567):",
+    "invalid_phone": "Пожалуйста, введите корректный номер телефона (например: +998901234567):",
+    "choose_course": "Какой курс Корана вы изучаете?",
+    "confirm_data": "📋 Ваши данные:\nИмя: {first_name}\nФамилия: {last_name}\nВозраст: {age}\nПол: {gender}\nТелефон: {phone}\nКурс: {course}\n\nДанные верны?",
+    "registration_canceled": "❌ Регистрация отменена. Начните заново: /start",
+    "registration_completed": "✅ Регистрация завершена! Спасибо."
+  }
+}

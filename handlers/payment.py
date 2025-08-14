@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from database import get_user_by_tg, create_payment
 from config import ADMIN_IDS
+import sqlite3
 
 class PaymentStates(StatesGroup):
     await_proof = State()
@@ -13,14 +14,31 @@ async def register_payment_handlers(dp):
     # 1. Tugma bosilganda chek so'rash
     @dp.callback_query(F.data == "pay_now")
     async def ask_payment_proof(callback: CallbackQuery, state: FSMContext):
+        tg_id = callback.from_user.id
+        user = get_user_by_tg(tg_id)
+        if not user:
+            await callback.message.answer("❌ Siz ro'yxatdan o'tmagansiz. Avval /start bilan ro'yxatdan o'ting.")
+            await callback.answer()
+            return
+
+        # Check if the user has an approved payment
+        with sqlite3.connect("users.db") as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT is_paid FROM users WHERE tg_id = ?", (tg_id,))
+            result = cur.fetchone()
+            if result and result[0] == 1:
+                await callback.message.answer("✅ Siz allaqachon to'lov qilgansiz.")
+                await callback.answer()
+                return
+
+        # If no approved payment, proceed to ask for payment proof
         await callback.message.answer("📷 To‘lov chekining suratini yuboring.")
-        await state.set_state(PaymentStates.await_proof)  # State to'g'ri belgilanadi
+        await state.set_state(PaymentStates.await_proof)
         await callback.answer()
 
     # 2. Rasm kelganda avtomatik adminga yuborish
     @dp.message(PaymentStates.await_proof, F.content_type == ContentType.PHOTO)
     async def get_payment_proof(message: Message, state: FSMContext):
-        print(90)
         tg_id = message.from_user.id
         user = get_user_by_tg(tg_id)
         if not user:

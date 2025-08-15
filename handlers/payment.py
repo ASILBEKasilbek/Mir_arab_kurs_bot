@@ -12,7 +12,7 @@ class PaymentStates(StatesGroup):
 async def register_payment_handlers(dp):
 
     # 1. Tugma bosilganda chek so'rash
-    @dp.callback_query(F.data == "pay_now")
+    @dp.callback_query(F.data.startswith("pay_now:"))
     async def ask_payment_proof(callback: CallbackQuery, state: FSMContext):
         tg_id = callback.from_user.id
         user = get_user_by_tg(tg_id)
@@ -20,6 +20,19 @@ async def register_payment_handlers(dp):
             await callback.message.answer("❌ Siz ro'yxatdan o'tmagansiz. Avval /start bilan ro'yxatdan o'ting.")
             await callback.answer()
             return
+
+        # Callbackdan kurs ID ni olish
+        course_id = callback.data.split(":")[1]
+        course = get_course_by_id(course_id)
+
+        await callback.message.answer(
+            f"📚 Siz {course['name']} kursi uchun to‘lov qilmoqdasiz.\n"
+            "Iltimos, to‘lov chekini yuboring."
+        )
+        await state.update_data(course_id=course_id)
+        await state.set_state(PaymentStates.await_proof)
+        await callback.answer()
+
 
         # Check if the user has an approved payment
         with sqlite3.connect("users.db") as conn:

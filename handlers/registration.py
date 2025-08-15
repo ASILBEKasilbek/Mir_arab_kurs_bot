@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import bleach
+from datetime import datetime
 from aiogram import F
 from aiogram.filters import Command
 from aiogram.types import (
@@ -28,8 +29,8 @@ class Registration(StatesGroup):
     age = State()
     gender = State()
     phone = State()
+    data_confirm = State()
     quran_course = State()
-    final_confirm = State()
 
 class EditProfile(StatesGroup):
     field = State()
@@ -53,18 +54,27 @@ def register_handlers(dp):
         """Handle the /start command to initiate registration or show profile."""
         user = get_user_by_tg(message.from_user.id)
         if user:
-            course_id = user[6]  # Assuming course_id is in index 6
-            course_display = next((c[1] for c in list_courses() if c[0] == course_id), course_id)
+            course_id = user[8]  # course_id is in index 8
+            is_paid = user[10]  # is_paid is in index 10
+            lang = user[2] if user[2] else "uz"  # lang is in index 2
+            course_display = next((c[1] for c in list_courses() if c[0] == course_id), "Kurs tanlanmagan")
             buttons = [
-                ("📋 Ma’lumotlarim", "view_profile"),
-                ("✏️ Tahrirlash", "edit_profile"),
-                ("💳 To‘lov qilish", "pay_now"),
-                ("❌ Bekor qilish", "cancel")
+                (TRANSLATIONS[lang]["view_profile"], "view_profile"),
+                (TRANSLATIONS[lang]["edit_profile"], "edit_profile")
             ]
+            if not course_id or not is_paid:
+                buttons.append((TRANSLATIONS[lang]["choose_course"], "choose_course"))
+            if course_id and not is_paid:
+                buttons.append((f"{TRANSLATIONS[lang]['pay_now']} ({course_display})", f"pay_now:{course_id}"))
+            buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
             kb = create_inline_keyboard(buttons)
             await message.answer(
-                f"✅ Siz ro‘yxatdan o‘tgansiz!\n\n"
-                f"Ism: {user[2]}\nFamiliya: {user[3]}\nKurs: {course_display}",
+                TRANSLATIONS[lang]["profile_summary"].format(
+                    first_name=user[3],
+                    last_name=user[4],
+                    course=course_display,
+                    payment_status=TRANSLATIONS[lang]["paid"] if is_paid else TRANSLATIONS[lang]["not_paid"]
+                ),
                 reply_markup=kb, parse_mode="Markdown"
             )
             logger.info(f"User {message.from_user.id} accessed profile.")
@@ -73,10 +83,10 @@ def register_handlers(dp):
         buttons = [
             ("🇺🇿 O‘zbek", "lang_uz"),
             ("🇷🇺 Русский", "lang_ru"),
-            ("❌ Bekor qilish", "cancel")
+            (TRANSLATIONS["uz"]["cancel"], "cancel")
         ]
         kb = create_inline_keyboard(buttons)
-        await message.answer("Tilni tanlang:", reply_markup=kb)
+        await message.answer(TRANSLATIONS["uz"]["choose_language"], reply_markup=kb)
         await state.set_state(Registration.lang)
         logger.info(f"User {message.from_user.id} started registration.")
 
@@ -85,11 +95,10 @@ def register_handlers(dp):
         """Set the user's language preference."""
         lang = callback.data.replace("lang_", "")
         await state.update_data(lang=lang)
-        yes_text, no_text = TRANSLATIONS[lang]["yes"], TRANSLATIONS[lang]["no"]
         buttons = [
-            (yes_text, "reg_yes"),
-            (no_text, "reg_no"),
-            ("❌ Bekor qilish", "cancel")
+            (TRANSLATIONS[lang]["yes"], "reg_yes"),
+            (TRANSLATIONS[lang]["no"], "reg_no"),
+            (TRANSLATIONS[lang]["cancel"], "cancel")
         ]
         kb = create_inline_keyboard(buttons)
         await callback.message.answer(TRANSLATIONS[lang]["register_prompt"], reply_markup=kb)
@@ -110,7 +119,7 @@ def register_handlers(dp):
             logger.info(f"User {callback.from_user.id} canceled registration.")
             return
 
-        buttons = [("❌ Bekor qilish", "cancel")]
+        buttons = [(TRANSLATIONS[lang]["cancel"], "cancel")]
         kb = create_inline_keyboard(buttons)
         await callback.message.answer(TRANSLATIONS[lang]["enter_first_name"], reply_markup=kb)
         await state.set_state(Registration.first_name)
@@ -124,11 +133,11 @@ def register_handlers(dp):
         lang = data.get("lang", "uz")
 
         if not first_name or len(first_name) < 2 or not first_name.isalpha():
-            await message.answer("Iltimos, to‘g‘ri ism kiriting (faqat harflar, kamida 2 ta).")
+            await message.answer(TRANSLATIONS[lang]["invalid_first_name"])
             return
 
         await state.update_data(first_name=first_name)
-        buttons = [("❌ Bekor qilish", "cancel")]
+        buttons = [(TRANSLATIONS[lang]["cancel"], "cancel")]
         kb = create_inline_keyboard(buttons)
         await message.answer(TRANSLATIONS[lang]["enter_last_name"], reply_markup=kb)
         await state.set_state(Registration.last_name)
@@ -142,11 +151,11 @@ def register_handlers(dp):
         lang = data.get("lang", "uz")
 
         if not last_name or len(last_name) < 2 or not last_name.isalpha():
-            await message.answer("Iltimos, to‘g‘ri familiya kiriting (faqat harflar, kamida 2 ta).")
+            await message.answer(TRANSLATIONS[lang]["invalid_last_name"])
             return
 
         await state.update_data(last_name=last_name)
-        buttons = [("❌ Bekor qilish", "cancel")]
+        buttons = [(TRANSLATIONS[lang]["cancel"], "cancel")]
         kb = create_inline_keyboard(buttons)
         await message.answer(TRANSLATIONS[lang]["enter_age"], reply_markup=kb)
         await state.set_state(Registration.age)
@@ -165,9 +174,9 @@ def register_handlers(dp):
 
         await state.update_data(age=int(age_text))
         buttons = [
-            ("Erkak ♂" if lang == "uz" else "Мужской ♂", "gender_erkak"),
-            ("Ayol ♀" if lang == "uz" else "Женский ♀", "gender_ayol"),
-            ("❌ Bekor qilish", "cancel")
+            (TRANSLATIONS[lang]["gender_male"], "gender_erkak"),
+            (TRANSLATIONS[lang]["gender_female"], "gender_ayol"),
+            (TRANSLATIONS[lang]["cancel"], "cancel")
         ]
         kb = create_inline_keyboard(buttons)
         await message.answer(TRANSLATIONS[lang]["choose_gender"], reply_markup=kb)
@@ -184,148 +193,271 @@ def register_handlers(dp):
 
         phone_kb = ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(
-                text="📞 Telefon raqamni yuborish" if lang == "uz" else "📞 Отправить номер телефона",
+                text=TRANSLATIONS[lang]["share_phone"],
                 request_contact=True
             )]],
             resize_keyboard=True
         )
-        buttons = [("❌ Bekor qilish", "cancel")]
+        buttons = [(TRANSLATIONS[lang]["cancel"], "cancel")]
         inline_kb = create_inline_keyboard(buttons)
         await callback.message.answer(
             TRANSLATIONS[lang]["enter_phone"],
             reply_markup=phone_kb
         )
-        await callback.message.answer("Yoki raqamni yozing:", reply_markup=inline_kb)
+        await callback.message.answer(TRANSLATIONS[lang]["or_type_phone"], reply_markup=inline_kb)
         await state.set_state(Registration.phone)
         await callback.answer()
         logger.info(f"User {callback.from_user.id} selected gender: {gender}")
 
     @dp.message(Registration.phone, F.content_type.in_([ContentType.CONTACT, ContentType.TEXT]))
     async def get_phone(message: Message, state: FSMContext):
-        """Get and validate the user's phone number."""
-        # 1️⃣ Telegram kontakt yoki yozilgan textdan raqam olish
+        """Get and validate the user's phone number, then ask for data confirmation."""
         if message.content_type == ContentType.CONTACT and message.contact:
             phone_number = message.contact.phone_number
         else:
             phone_number = message.text.strip()
 
-        # 2️⃣ Raqamni +998 formatiga keltirish
         if phone_number.startswith("998") and len(phone_number) == 12:
             phone_number = f"+{phone_number}"
         elif phone_number.startswith("0") and len(phone_number) == 10:
             phone_number = f"+998{phone_number[1:]}"
         
-        # 3️⃣ Tilni olish
         data = await state.get_data()
         lang = data.get("lang", "uz")
 
-        # 4️⃣ Tekshirish — faqat O‘zbek raqamlari
         phone_pattern = r"^\+998\d{9}$"
         if not re.match(phone_pattern, phone_number):
             await message.answer(TRANSLATIONS[lang]["invalid_phone"])
             return
 
-        # 5️⃣ State’ga saqlash
         await state.update_data(phone=phone_number)
 
-        # 6️⃣ Kurslar ro‘yxatini chiqarish
-        courses = list_courses()
-        buttons = [(course[1], f"course_{course[0]}") for course in courses]
-        buttons.append(("❌ Bekor qilish", "cancel"))
-
-        kb = create_inline_keyboard(buttons, row_width=1)
-        await message.answer(TRANSLATIONS[lang]["choose_course"], reply_markup=kb)
-
-        await state.set_state(Registration.quran_course)
+        confirm_text = TRANSLATIONS[lang]["confirm_data"].format(
+            first_name=data["first_name"],
+            last_name=data["last_name"],
+            age=data["age"],
+            gender=TRANSLATIONS[lang]["gender_male"] if data["gender"] == "erkak" else TRANSLATIONS[lang]["gender_female"],
+            phone=phone_number,
+            course=""
+        )
+        buttons = [
+            (TRANSLATIONS[lang]["yes"], "data_yes"),
+            (TRANSLATIONS[lang]["no"], "data_no"),
+            (TRANSLATIONS[lang]["cancel"], "cancel")
+        ]
+        kb = create_inline_keyboard(buttons)
+        await message.answer(
+            f"{confirm_text}\n\n{TRANSLATIONS[lang]['confirm_prompt']}",
+            reply_markup=kb,
+            parse_mode="Markdown"
+        )
+        await state.set_state(Registration.data_confirm)
         logger.info(f"User {message.from_user.id} entered phone: {phone_number}")
+
+    @dp.callback_query(Registration.data_confirm, F.data.startswith("data_"))
+    async def confirm_data(callback: CallbackQuery, state: FSMContext):
+        """Handle data confirmation and save user to database."""
+        choice = callback.data.replace("data_", "")
+        data = await state.get_data()
+        lang = data.get("lang", "uz")
+
+        if choice == "no":
+            buttons = [
+                ("🇺🇿 O‘zbek", "lang_uz"),
+                ("🇷🇺 Русский", "lang_ru"),
+                (TRANSLATIONS[lang]["cancel"], "cancel")
+            ]
+            kb = create_inline_keyboard(buttons)
+            await callback.message.answer(TRANSLATIONS[lang]["restart_registration"], reply_markup=kb)
+            await state.set_state(Registration.lang)
+            await callback.answer()
+            logger.info(f"User {callback.from_user.id} chose to restart registration.")
+            return
+
+        try:
+            # Save user to database without course
+            user_data = {
+                "tg_id": callback.from_user.id,
+                "lang": data.get("lang"),
+                "first_name": data.get("first_name"),
+                "last_name": data.get("last_name"),
+                "age": data.get("age"),
+                "gender": data.get("gender"),
+                "phone": data.get("phone"),
+                "course_id": None,
+                "registered_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "is_paid": 0,
+                "paid_at": None
+            }
+            save_user(user_data)
+            logger.info(f"User {callback.from_user.id} saved to database without course.")
+        except Exception as e:
+            await callback.message.answer(
+                TRANSLATIONS[lang]["error"].format(error=str(e))
+            )
+            await callback.answer(show_alert=True)
+            logger.error(f"Error saving user {callback.from_user.id}: {str(e)}")
+            return
+
+        user_gender = data.get("gender", "hammasi")
+        courses = [
+            course for course in list_courses()
+            if course[3] == "hammasi" or course[3] == user_gender
+        ]
+        if not courses:
+            await callback.message.answer(TRANSLATIONS[lang]["no_courses_available"])
+            await state.clear()
+            await callback.answer()
+            logger.info(f"No courses available for user {callback.from_user.id} with gender {user_gender}.")
+            return
+
+        course_text = TRANSLATIONS[lang]["choose_course"] + "\n\n"
+        buttons = []
+        for course in courses:
+            course_id, name, description, gender, start_date, limit_count, seats_available, price = course
+            course_text += (
+                f"📚 *{name}*\n"
+                f"{TRANSLATIONS[lang]['course_description']}: {description}\n"
+                f"{TRANSLATIONS[lang]['course_gender']}: {TRANSLATIONS[lang]['gender_all'] if gender == 'hammasi' else TRANSLATIONS[lang]['gender_male'] if gender == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
+                f"{TRANSLATIONS[lang]['start_date']}: {start_date}\n"
+                f"{TRANSLATIONS[lang]['seats_available']}: {seats_available}/{limit_count}\n"
+                f"{TRANSLATIONS[lang]['price']}: {price} UZS\n\n"
+            )
+            buttons.append((name, f"course_{course_id}"))
+
+        buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
+        kb = create_inline_keyboard(buttons, row_width=1)
+        await callback.message.answer(course_text, reply_markup=kb, parse_mode="Markdown")
+        await state.set_state(Registration.quran_course)
+        await callback.answer()
+        logger.info(f"User {callback.from_user.id} proceeded to course selection.")
+
+    @dp.callback_query(F.data == "choose_course")
+    async def choose_course_prompt(callback: CallbackQuery, state: FSMContext):
+        """Prompt user to select a course."""
+        user = get_user_by_tg(callback.from_user.id)
+        if not user:
+            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
+            await callback.answer()
+            return
+
+        lang = user[2] if user[2] else "uz"
+        user_gender = user[6]  # gender is in index 6
+        courses = [
+            course for course in list_courses()
+            if course[3] == "hammasi" or course[3] == user_gender
+        ]
+        if not courses:
+            await callback.message.answer(TRANSLATIONS[lang]["no_courses_available"])
+            await callback.answer()
+            logger.info(f"No courses available for user {callback.from_user.id} with gender {user_gender}.")
+            return
+
+        course_text = TRANSLATIONS[lang]["choose_course"] + "\n\n"
+        buttons = []
+        for course in courses:
+            course_id, name, description, gender, start_date, limit_count, seats_available, price = course
+            course_text += (
+                f"📚 *{name}*\n"
+                f"{TRANSLATIONS[lang]['course_description']}: {description}\n"
+                f"{TRANSLATIONS[lang]['course_gender']}: {TRANSLATIONS[lang]['gender_all'] if gender == 'hammasi' else TRANSLATIONS[lang]['gender_male'] if gender == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
+                f"{TRANSLATIONS[lang]['start_date']}: {start_date}\n"
+                f"{TRANSLATIONS[lang]['seats_available']}: {seats_available}/{limit_count}\n"
+                f"{TRANSLATIONS[lang]['price']}: {price} UZS\n\n"
+            )
+            buttons.append((name, f"course_{course_id}"))
+
+        buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
+        kb = create_inline_keyboard(buttons, row_width=1)
+        await callback.message.answer(course_text, reply_markup=kb, parse_mode="Markdown")
+        await state.set_state(Registration.quran_course)
+        await callback.answer()
+        logger.info(f"User {callback.from_user.id} prompted to choose course.")
 
     @dp.callback_query(Registration.quran_course, F.data.startswith("course_"))
     async def choose_course(callback: CallbackQuery, state: FSMContext):
         """Set the user's selected course."""
         course_id = callback.data.replace("course_", "")
-        await state.update_data(quran_course=course_id)
-        data = await state.get_data()
-        lang = data.get("lang", "uz")
-
-        course_name = next((c[1] for c in list_courses() if c[0] == int(course_id)), course_id)
-        confirm_text = TRANSLATIONS[lang]["confirm_data"].format(
-            first_name=data["first_name"],
-            last_name=data["last_name"],
-            age=data["age"],
-            gender="Erkak" if data["gender"] == "erkak" else "Ayol" if lang == "uz" else
-                   "Мужской" if data["gender"] == "erkak" else "Женский",
-            phone=data["phone"],
-            course=course_name
-        )
-        buttons = [
-            (TRANSLATIONS[lang]["yes"], "confirm_yes"),
-            (TRANSLATIONS[lang]["no"], "confirm_no"),
-            ("❌ Bekor qilish", "cancel")
-        ]
-        kb = create_inline_keyboard(buttons)
-        await callback.message.answer(confirm_text, reply_markup=kb, parse_mode="Markdown")
-        await state.set_state(Registration.final_confirm)
-        await callback.answer()
-        logger.info(f"User {callback.from_user.id} selected course: {course_id}")
-
-    @dp.callback_query(Registration.final_confirm, F.data.startswith("confirm_"))
-    async def final_confirmation(callback: CallbackQuery, state: FSMContext):
-        """Finalize registration and save user data."""
-        choice = callback.data.replace("confirm_", "")
-        data = await state.get_data()
-        lang = data.get("lang", "uz")
-
-        if choice == "no":
-            await callback.message.answer(TRANSLATIONS[lang]["registration_canceled"])
-            await state.clear()
+        user = get_user_by_tg(callback.from_user.id)
+        if not user:
+            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
             await callback.answer()
-            logger.info(f"User {callback.from_user.id} canceled registration.")
             return
 
+        lang = user[2] if user[2] else "uz"
         try:
-            data["tg_id"] = callback.from_user.id
-            save_user(data)
-            buttons = [("💳 To‘lov qilish", "pay_now"), ("❌ Bekor qilish", "cancel")]
+            update_user_field(callback.from_user.id, "course_id", int(course_id))
+            course_name = next((c[1] for c in list_courses() if c[0] == int(course_id)), course_id)
+            buttons = [
+                (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}"),
+                (TRANSLATIONS[lang]["cancel"], "cancel")
+            ]
             kb = create_inline_keyboard(buttons)
             await callback.message.answer(
-                TRANSLATIONS[lang]["registration_completed"],
-                reply_markup=kb
+                TRANSLATIONS[lang]["course_selected"].format(course=course_name),
+                reply_markup=kb,
+                parse_mode="Markdown"
             )
             await state.clear()
             await callback.answer()
-            logger.info(f"User {callback.from_user.id} completed registration.")
+            logger.info(f"User {callback.from_user.id} selected course: {course_id}")
         except Exception as e:
             await callback.message.answer(
-                f"Xato yuz berdi: {str(e)}" if lang == "uz" else f"Произошла ошибка: {str(e)}"
+                TRANSLATIONS[lang]["error"].format(error=str(e))
             )
             await callback.answer(show_alert=True)
-            logger.error(f"Error saving user {callback.from_user.id}: {str(e)}")
+            logger.error(f"Error updating course for user {callback.from_user.id}: {str(e)}")
+
+    @dp.callback_query(F.data.startswith("pay_now:"))
+    async def handle_payment(callback: CallbackQuery, state: FSMContext):
+        """Handle payment action for selected course."""
+        course_id = callback.data.replace("pay_now:", "")
+        user = get_user_by_tg(callback.from_user.id)
+        if not user:
+            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
+            await callback.answer()
+            return
+
+        lang = user[2] if user[2] else "uz"
+        course_name = next((c[1] for c in list_courses() if str(c[0]) == course_id), course_id)
+        await callback.message.answer(
+            TRANSLATIONS[lang]["payment_prompt"].format(course=course_name),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+        logger.info(f"User {callback.from_user.id} initiated payment for course: {course_id}")
 
     @dp.callback_query(F.data == "view_profile")
     async def view_profile(callback: CallbackQuery):
         """Display the user's profile."""
         user = get_user_by_tg(callback.from_user.id)
         if not user:
-            await callback.message.answer("❌ Foydalanuvchi topilmadi.")
+            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
             await callback.answer()
             return
 
-        course_id = user[6]
-        course_name = next((c[1] for c in list_courses() if c[0] == course_id), course_id)
+        course_id = user[8]  # course_id is in index 8
+        is_paid = user[10]  # is_paid is in index 10
+        lang = user[2] if user[2] else "uz"
+        course_name = next((c[1] for c in list_courses() if c[0] == course_id), TRANSLATIONS[lang]["no_course"])
         text = (
-            f"📋 *Ma’lumotlaringiz:*\n"
-            f"**Ism:** {user[2]}\n"
-            f"**Familiya:** {user[3]}\n"
-            f"**Yosh:** {user[4]}\n"
-            f"**Jins:** {'Erkak' if user[5] == 'erkak' else 'Ayol'}\n"
-            f"**Telefon:** {user[6]}\n"
-            f"**Kurs:** {course_name}"
+            f"📋 *{TRANSLATIONS[lang]['profile_info']}:*\n"
+            f"**{TRANSLATIONS[lang]['first_name']}:** {user[3]}\n"
+            f"**{TRANSLATIONS[lang]['last_name']}:** {user[4]}\n"
+            f"**{TRANSLATIONS[lang]['age']}:** {user[5]}\n"
+            f"**{TRANSLATIONS[lang]['gender']}:** {TRANSLATIONS[lang]['gender_male'] if user[6] == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
+            f"**{TRANSLATIONS[lang]['phone']}:** {user[7]}\n"
+            f"**{TRANSLATIONS[lang]['course']}:** {course_name}\n"
+            f"**{TRANSLATIONS[lang]['payment_status']}:** {TRANSLATIONS[lang]['paid'] if is_paid else TRANSLATIONS[lang]['not_paid']}"
         )
         buttons = [
-            ("✏️ Tahrirlash", "edit_profile"),
-            ("💳 To‘lov qilish", "pay_now"),
-            ("❌ Bekor qilish", "cancel")
+            (TRANSLATIONS[lang]["edit_profile"], "edit_profile"),
         ]
+        if not course_id or not is_paid:
+            buttons.append((TRANSLATIONS[lang]["choose_course"], "choose_course"))
+        if course_id and not is_paid:
+            buttons.append((f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}"))
+        buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
         kb = create_inline_keyboard(buttons)
         await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
         await callback.answer()
@@ -336,22 +468,23 @@ def register_handlers(dp):
         """Start the profile editing process."""
         user = get_user_by_tg(callback.from_user.id)
         if not user:
-            await callback.message.answer("❌ Foydalanuvchi topilmadi.")
+            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
             await callback.answer()
             return
 
-        await state.update_data(user_id=user[0], lang="uz")  # Default to uz, or store lang in DB
+        lang = user[2] if user[2] else "uz"
+        await state.update_data(user_id=user[0], lang=lang)
         buttons = [
-            ("Ism", "edit_first_name"),
-            ("Familiya", "edit_last_name"),
-            ("Yosh", "edit_age"),
-            ("Jins", "edit_gender"),
-            ("Telefon", "edit_phone"),
-            ("Kurs", "edit_course"),
-            ("❌ Bekor qilish", "cancel")
+            (TRANSLATIONS[lang]["first_name"], "edit_first_name"),
+            (TRANSLATIONS[lang]["last_name"], "edit_last_name"),
+            (TRANSLATIONS[lang]["age"], "edit_age"),
+            (TRANSLATIONS[lang]["gender"], "edit_gender"),
+            (TRANSLATIONS[lang]["phone"], "edit_phone"),
+            (TRANSLATIONS[lang]["course"], "edit_course"),
+            (TRANSLATIONS[lang]["cancel"], "cancel")
         ]
         kb = create_inline_keyboard(buttons)
-        await callback.message.answer("Qaysi maydonni tahrirlamoqchisiz?", reply_markup=kb)
+        await callback.message.answer(TRANSLATIONS[lang]["choose_field"], reply_markup=kb)
         await state.set_state(EditProfile.field)
         await callback.answer()
         logger.info(f"User {callback.from_user.id} started editing profile.")
@@ -366,24 +499,29 @@ def register_handlers(dp):
 
         if field == "gender":
             buttons = [
-                ("Erkak ♂" if lang == "uz" else "Мужской ♂", "gender_erkak"),
-                ("Ayol ♀" if lang == "uz" else "Женский ♀", "gender_ayol"),
-                ("❌ Bekor qilish", "cancel")
+                (TRANSLATIONS[lang]["gender_male"], "gender_erkak"),
+                (TRANSLATIONS[lang]["gender_female"], "gender_ayol"),
+                (TRANSLATIONS[lang]["cancel"], "cancel")
             ]
             kb = create_inline_keyboard(buttons)
             await callback.message.answer(TRANSLATIONS[lang]["choose_gender"], reply_markup=kb)
             await state.set_state(EditProfile.new_value)
         elif field == "course":
-            courses = list_courses()
-            buttons = [(name, f"course_{id}") for id, name in courses] + [("❌ Bekor qilish", "cancel")]
+            user = get_user_by_tg(callback.from_user.id)
+            user_gender = user[6] if user else "hammasi"
+            courses = [
+                course for course in list_courses()
+                if course[3] == "hammasi" or course[3] == user_gender
+            ]
+            buttons = [(name, f"course_{id}") for id, name, *_ in courses] + [(TRANSLATIONS[lang]["cancel"], "cancel")]
             kb = create_inline_keyboard(buttons, row_width=1)
             await callback.message.answer(TRANSLATIONS[lang]["choose_course"], reply_markup=kb)
             await state.set_state(EditProfile.new_value)
         else:
-            buttons = [("❌ Bekor qilish", "cancel")]
+            buttons = [(TRANSLATIONS[lang]["cancel"], "cancel")]
             kb = create_inline_keyboard(buttons)
             await callback.message.answer(
-                TRANSLATIONS[lang].get(f"enter_{field}", "Yangi qiymatni kiriting:"),
+                TRANSLATIONS[lang].get(f"enter_{field}", TRANSLATIONS[lang]["enter_new_value"]),
                 reply_markup=kb
             )
             await state.set_state(EditProfile.new_value)
@@ -398,11 +536,10 @@ def register_handlers(dp):
         user_id = data["user_id"]
         new_value = message.text.strip()
 
-        # Validation
         if field == "first_name" or field == "last_name":
             new_value = sanitize_input(new_value)
             if not new_value or len(new_value) < 2 or not new_value.isalpha():
-                await message.answer(f"Iltimos, to‘g‘ri {field} kiriting (faqat harflar, kamida 2 ta).")
+                await message.answer(TRANSLATIONS[lang][f"invalid_{field}"])
                 return
         elif field == "age":
             if not new_value.isdigit() or not (1 <= int(new_value) <= 150):
@@ -415,18 +552,27 @@ def register_handlers(dp):
                 await message.answer(TRANSLATIONS[lang]["invalid_phone"])
                 return
         elif field in ("gender", "course"):
-            await message.answer("Iltimos, tugmalardan birini tanlang.")
+            await message.answer(TRANSLATIONS[lang]["use_buttons"])
             return
 
         try:
             update_user_field(user_id, field, new_value)
-            buttons = [("💳 To‘lov qilish", "pay_now"), ("❌ Bekor qilish", "cancel")]
+            user = get_user_by_tg(user_id)
+            course_id = user[8]
+            is_paid = user[10]
+            course_name = next((c[1] for c in list_courses() if c[0] == course_id), TRANSLATIONS[lang]["no_course"])
+            buttons = [
+                (TRANSLATIONS[lang]["choose_course"], "choose_course") if not course_id or not is_paid else None,
+                (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}") if course_id and not is_paid else None,
+                (TRANSLATIONS[lang]["cancel"], "cancel")
+            ]
+            buttons = [b for b in buttons if b]
             kb = create_inline_keyboard(buttons)
-            await message.answer("✅ Maydon yangilandi.", reply_markup=kb)
+            await message.answer(TRANSLATIONS[lang]["field_updated"], reply_markup=kb)
             await state.clear()
             logger.info(f"User {message.from_user.id} updated {field} to {new_value}.")
         except Exception as e:
-            await message.answer(f"Xato yuz berdi: {str(e)}")
+            await message.answer(TRANSLATIONS[lang]["error"].format(error=str(e)))
             logger.error(f"Error updating {field} for user {message.from_user.id}: {str(e)}")
 
     @dp.callback_query(EditProfile.new_value, F.data.startswith(("gender_", "course_")))
@@ -439,15 +585,24 @@ def register_handlers(dp):
         new_value = callback.data.replace(f"{field}_", "")
 
         try:
-            update_user_field(user_id, field, new_value)
-            buttons = [("💳 To‘lov qilish", "pay_now"), ("❌ Bekor qilish", "cancel")]
+            update_user_field(user_id, field if field != "course" else "course_id", new_value)
+            user = get_user_by_tg(user_id)
+            course_id = user[8]
+            is_paid = user[10]
+            course_name = next((c[1] for c in list_courses() if c[0] == course_id), TRANSLATIONS[lang]["no_course"])
+            buttons = [
+                (TRANSLATIONS[lang]["choose_course"], "choose_course") if not course_id or not is_paid else None,
+                (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}") if course_id and not is_paid else None,
+                (TRANSLATIONS[lang]["cancel"], "cancel")
+            ]
+            buttons = [b for b in buttons if b]
             kb = create_inline_keyboard(buttons)
-            await callback.message.answer("✅ Maydon yangilandi.", reply_markup=kb)
+            await callback.message.answer(TRANSLATIONS[lang]["field_updated"], reply_markup=kb)
             await state.clear()
             await callback.answer()
             logger.info(f"User {callback.from_user.id} updated {field} to {new_value}.")
         except Exception as e:
-            await callback.message.answer(f"Xato yuz berdi: {str(e)}")
+            await callback.message.answer(TRANSLATIONS[lang]["error"].format(error=str(e)))
             await callback.answer(show_alert=True)
             logger.error(f"Error updating {field} for user {callback.from_user.id}: {str(e)}")
 

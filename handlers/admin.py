@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from database import (
     list_pending_payments, set_payment_status, get_user_by_tg,
     list_courses, add_course, get_stats, update_user_field, get_all_users,
-    get_users_by_gender, get_user_by_id
+    get_users_by_gender, get_user_by_id, delete_course
 )
 from config import ADMIN_IDS
 import logging
@@ -19,6 +19,16 @@ from io import BytesIO
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+from aiogram.fsm.state import State, StatesGroup
+
+class AddCourseStates(StatesGroup):
+    name = State()
+    description = State()
+    gender = State()
+    boshlanish_sanasi = State()
+    limit_count = State()
+    narx = State()
 
 def create_inline_keyboard(buttons: list, row_width: int = 2) -> InlineKeyboardMarkup:
     """Create an inline keyboard from a list of (text, callback_data) tuples."""
@@ -321,41 +331,53 @@ def register_admin_handlers(dp):
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error rejecting payment for admin {callback.from_user.id}: {str(e)}")
+   
     @dp.callback_query(F.data == "adm_courses")
     @admin_only
     async def adm_courses(callback: CallbackQuery):
-        """List available courses."""
+        """Kurslar ro'yxatini ko‘rsatish."""
         try:
             rows = list_courses()
+
+            buttons = []
             if rows:
-                text = "Kurslar:\n" + "\n".join([f"{r[0]}. {r[1]} - {r[2]}" for r in rows])
-                # Har bir kursga "O'chirish" tugmasi qo'shamiz
-                buttons = [(f"❌ {r[1]}", f"course_del:{r[0]}") for r in rows]
+                text = "📚 *Kurslar ro‘yxati:*\n\n" + "\n".join([
+                    f"**{r[0]}.** {r[1]}\n"
+                    f"📝 {r[2]}\n"
+                    f"📅 Boshlanish sanasi: {r[4]}\n"
+                    f"👥 Jins: {r[3]} | 📦 Joy: {r[6]}/{r[5]} ta\n"
+                    for r in rows
+                ])
+                # Har bir kurs uchun "O'chirish" tugmasi
+                buttons.extend([(f"❌ {r[1]}", f"course_del:{r[0]}") for r in rows])
             else:
-                text = "Hozircha kurslar yo'q."
-                buttons = []
-            
-            # Qo'shish tugmasini oxirida chiqaramiz
-            buttons.append(("➕ Kurs qo'shish", "course_add"))
+                text = (
+                    "⚠️ *Hozircha kurslar mavjud emas!*\n\n"
+                    "📌 Yangi kurs qo‘shish uchun quyidagi tugmadan foydalaning."
+                )
+
+            # Qo'shish tugmasi
+            buttons.append(("➕ Kurs qo‘shish", "course_add"))
 
             kb = create_inline_keyboard(buttons)
-            await callback.message.answer(text, reply_markup=kb)
+            await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed courses.")
+            
         except Exception as e:
-            await callback.message.answer(f"Xato yuz berdi: {str(e)}")
+            await callback.message.answer("❌ Kurslar ro‘yxatini yuklashda xatolik yuz berdi. Keyinroq urinib ko‘ring.")
             await callback.answer("Xato", show_alert=True)
-            logger.error(f"Error in adm_courses for admin {callback.from_user.id}: {str(e)}")
+            logger.error(f"Error in adm_courses for admin {callback.from_user.id}: {e}", exc_info=True)
 
 
     @dp.callback_query(F.data.startswith("course_del:"))
     @admin_only
     async def delete_course_cb(callback: CallbackQuery):
-        """Delete a course by ID."""
+        """Kursni ID bo‘yicha o‘chirish."""
         try:
             course_id = int(callback.data.split(":")[1])
-            delete_course(course_id)  # Bazadan o'chirish funksiyasi
-            await callback.message.answer(f"Kurs o'chirildi. ID: {course_id}")
+            delete_course(course_id)
+            await callback.message.answer(f"✅ Kurs o'chirildi. ID: {course_id}")
             logger.info(f"Admin {callback.from_user.id} deleted course ID: {course_id}")
             await callback.answer()
         except Exception as e:
@@ -363,33 +385,107 @@ def register_admin_handlers(dp):
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error deleting course for admin {callback.from_user.id}: {str(e)}")
 
+# handlers/admin.py
 
     @dp.callback_query(F.data == "course_add")
     @admin_only
-    async def course_add_cb(callback: CallbackQuery):
-        """Prompt to add a new course."""
-        await callback.message.answer("Kurs qo'shish uchun: /addcourse Kurs_nomi [Tavsif]\nMasalan: /addcourse YangiKurs Yangi kurs tavsifi")
+    async def course_add_start(callback: CallbackQuery, state: FSMContext):
+        await callback.message.answer("📚 Yangi kurs nomini kiriting:")
+        await state.set_state(AddCourseStates.name)
         await callback.answer()
-        logger.info(f"Admin {callback.from_user.id} requested to add a course.")
 
-
-    @dp.message(Command("addcourse"))
+    @dp.message(AddCourseStates.name)
     @admin_only
-    async def addcourse_cmd(message: Message):
-        """Add a new course."""
-        parts = message.text.split(maxsplit=2)
-        if len(parts) < 2:
-            await message.reply("Foydalanish: /addcourse Kurs_nomi [Tavsif]\nMasalan: /addcourse YangiKurs Yangi kurs tavsifi")
-            return
-        name = parts[1].strip()
-        description = parts[2].strip() if len(parts) > 2 else ""
+    async def add_course_name(message: Message, state: FSMContext):
+        await state.update_data(name=message.text.strip())
+        await message.answer("📝 Kurs tavsifini kiriting:")
+        await state.set_state(AddCourseStates.description)
+
+    @dp.message(AddCourseStates.description)
+    @admin_only
+    async def add_course_description(message: Message, state: FSMContext):
+        await state.update_data(description=message.text.strip())
+        kb = create_inline_keyboard([
+            ("👨 Erkak", "gender:erkak"),
+            ("👩 Ayol", "gender:ayol"),
+            ("👥 Hammasi", "gender:hammasi")
+        ])
+        await message.answer("👥 Qaysi jins uchun mo‘ljallangan?", reply_markup=kb)
+
+    @dp.callback_query(F.data.startswith("gender:"))
+    @admin_only
+    async def add_course_limit_start(callback: CallbackQuery, state: FSMContext):
+        gender = callback.data.split(":")[1]
+        await state.update_data(gender=gender)
+        await callback.message.answer("📦 Necha joy bo‘lishini kiriting (limit):")
+        await state.set_state(AddCourseStates.limit_count)
+        await callback.answer()
+
+    @dp.message(AddCourseStates.limit_count)
+    @admin_only
+    async def add_course_boshlanish_sanasi(message: Message, state: FSMContext):
         try:
-            add_course(name, description)
-            await message.reply(f"Kurs qo'shildi: {name} - {description}")
-            logger.info(f"Admin {message.from_user.id} added course: {name}")
-        except Exception as e:
-            await message.reply(f"Xato yuz berdi: {str(e)}")
-            logger.error(f"Error adding course for admin {message.from_user.id}: {str(e)}")
+            limit_count = int(message.text.strip())
+            if limit_count <= 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Limit butun musbat son bo‘lishi kerak. Qayta kiriting:")
+            return
+
+        await state.update_data(limit_count=limit_count)
+        await message.answer("📅 Kurs boshlanish sanasini kiriting (YYYY-MM-DD formatida):")
+        await state.set_state(AddCourseStates.boshlanish_sanasi)
+    
+    @dp.message(AddCourseStates.boshlanish_sanasi)
+    @admin_only
+    async def add_course_narx(message: Message, state: FSMContext):
+        from datetime import datetime
+        boshlanish_sanasi = message.text.strip()
+
+        try:
+            datetime.strptime(boshlanish_sanasi, "%Y-%m-%d")
+        except ValueError:
+            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: YYYY-MM-DD")
+            return
+
+        await state.update_data(boshlanish_sanasi=boshlanish_sanasi)
+        await message.answer("💰 Kurs narxini kiriting (faqat son, masalan: 250000):")
+        await state.set_state(AddCourseStates.narx)
+
+    @dp.message(AddCourseStates.narx)
+    @admin_only
+    async def add_course_finish(message: Message, state: FSMContext):
+        try:
+            narx = float(message.text.strip())
+            if narx < 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Narx musbat son bo‘lishi kerak. Qayta kiriting:")
+            return
+
+        await state.update_data(narx=narx)
+        data = await state.get_data()
+
+        add_course(
+            name=data["name"],
+            description=data["description"],
+            gender=data["gender"],
+            boshlanish_sanasi=data["boshlanish_sanasi"],
+            limit_count=data["limit_count"],
+            narx=data["narx"]
+        )
+
+        await message.answer(
+            f"✅ Kurs qo‘shildi!\n\n"
+            f"📚 {data['name']}\n"
+            f"📝 {data['description']}\n"
+            f"👥 {data['gender']}\n"
+            f"📦 {data['limit_count']} ta joy\n"
+            f"📅 Boshlanish sanasi: {data['boshlanish_sanasi']}\n"
+            f"💰 Narx: {data['narx']:,} so‘m"
+        )
+        await state.clear()
+
 
     @dp.callback_query(F.data == "adm_stats")
     @admin_only

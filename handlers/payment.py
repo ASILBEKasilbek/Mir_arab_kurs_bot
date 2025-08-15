@@ -2,7 +2,7 @@ from aiogram import F
 from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from database import get_user_by_tg, create_payment
+from database import get_user_by_tg, create_payment,get_course_by_id
 from config import ADMIN_IDS
 import sqlite3
 

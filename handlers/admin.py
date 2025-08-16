@@ -191,7 +191,7 @@ def register_admin_handlers(dp):
             text = (
                 f"ID: {user[0]}\n"
                 f"TG ID: {user[1]}\n"
-                f"Til: {user[2] or 'Noma\'lum'}\n"
+                f"Til: {user[2] or "Noma\'lum"}\n"
                 f"Ism: {user[3]}\n"
                 f"Familiya: {user[4]}\n"
                 f"Yosh: {user[5]}\n"

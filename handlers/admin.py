@@ -519,20 +519,21 @@ def register_admin_handlers(dp):
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
             text = (
-                f"Foydalanuvchi ma'lumotlari:\n"
-                f"ID: {user_id}\n"
-                f"TG ID: {user[0]}\n"
-                f"Til: {user[1] or 'Noma\'lum'}\n"
-                f"Ism: {user[2]}\n"
-                f"Familiya: {user[3]}\n"
-                f"Yosh: {user[4]}\n"
-                f"Jins: {user[5]}\n"
-                f"Telefon: {user[6]}\n"
-                f"Kurs: {course_name}\n\n"
-                f"Tahrirlash uchun: /edituser {user_id} field value\n"
-                f"Masalan: /edituser {user_id} first_name YangiIsm\n"
-                f"Maydonlar: first_name, last_name, age, gender, phone, course_id"
-            )
+                    f"Foydalanuvchi ma'lumotlari:\n"
+                    f"ID: {user_id}\n"
+                    f"TG ID: {user[0]}\n"
+                    f"Til: {user[1] or 'Nomaʼlum'}\n"
+                    f"Ism: {user[2]}\n"
+                    f"Familiya: {user[3]}\n"
+                    f"Yosh: {user[4]}\n"
+                    f"Jins: {user[5]}\n"
+                    f"Telefon: {user[6]}\n"
+                    f"Kurs: {course_name}\n\n"
+                    f"Tahrirlash uchun: /edituser {user_id} field value\n"
+                    f"Masalan: /edituser {user_id} first_name YangiIsm\n"
+                    f"Maydonlar: first_name, last_name, age, gender, phone, course_id"
+                )
+
             await callback.message.answer(text)
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed user {user_id} for editing.")

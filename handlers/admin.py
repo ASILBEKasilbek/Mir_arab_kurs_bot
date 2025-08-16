@@ -189,16 +189,16 @@ def register_admin_handlers(dp):
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
             text = (
-                f"ID: {user[0]}\n"
-                f"TG ID: {user[1]}\n"
-                f"Til: {user[2] or "Noma\'lum"}\n"
-                f"Ism: {user[3]}\n"
-                f"Familiya: {user[4]}\n"
-                f"Yosh: {user[5]}\n"
-                f"Jins: {user[6]}\n"
-                f"Telefon: {user[7]}\n"
-                f"Kurs: {course_name}"
-            )
+                    f"ID: {user[0]}\n"
+                    f"TG ID: {user[1]}\n"
+                    f"Til: {user[2] or 'Nomaʼlum'}\n"
+                    f"Ism: {user[3]}\n"
+                    f"Familiya: {user[4]}\n"
+                    f"Yosh: {user[5]}\n"
+                    f"Jins: {user[6]}\n"
+                    f"Telefon: {user[7]}\n"
+                    f"Kurs: {course_name}"
+                )
             await message.answer(text)
             await state.clear()
             logger.info(f"Admin {message.from_user.id} viewed user {user_id}.")

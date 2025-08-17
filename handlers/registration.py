@@ -82,7 +82,7 @@ def register_handlers(dp):
 
         buttons = [
             ("🇺🇿 O‘zbek", "lang_uz"),
-            ("🇷🇺 Русский", "lang_ru"),
+            ("🇷🇺 Кирилча", "lang_ru"),
             (TRANSLATIONS["uz"]["cancel"], "cancel")
         ]
         kb = create_inline_keyboard(buttons)

@@ -556,6 +556,7 @@ def register_handlers(dp):
             return
 
         try:
+            print(user_id,field, new_value)
             update_user_field(user_id, field, new_value)
             user = get_user_by_tg(user_id)
             course_id = user[8]

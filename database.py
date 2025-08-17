@@ -149,25 +149,58 @@ def save_user(data: dict):
     conn.commit()
     conn.close()
 
-def get_user_by_tg(tg_id):
+def get_user_by_tg(identifier):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT id, tg_id, lang, first_name, last_name, age, gender, phone, course_id, registered_at, is_paid, paid_at FROM users WHERE tg_id = ?", (tg_id,))
+    c.execute("""
+        SELECT id, tg_id, lang, first_name, last_name, age, gender, phone, course_id, registered_at, is_paid, paid_at 
+        FROM users
+        WHERE id = ? OR tg_id = ?
+    """, (identifier, identifier))
+    
     row = c.fetchone()
     conn.close()
     return row
 
-def update_user_field(tg_id, field, value):
+
+def update_user_field(user_identifier, field, value):
+    """
+    user_identifier: tg_id yoki id bo'lishi mumkin (int)
+    field: yangilanadigan ustun nomi
+    value: yangi qiymat
+    """
+    allowed_fields = [
+        "lang", "first_name", "last_name", "age", "gender",
+        "phone", "course_id", "registered_at", "is_paid", "paid_at"
+    ]
+    if field not in allowed_fields:
+        raise ValueError("Invalid field")
+    
     conn = get_conn()
     c = conn.cursor()
+    
+    # course_id uchun tekshiruv
     if field == "course_id" and value is not None:
         c.execute("SELECT id FROM courses WHERE id = ?", (value,))
         if not c.fetchone():
             conn.close()
             raise ValueError(f"Course ID {value} does not exist")
-    c.execute(f"UPDATE users SET {field} = ? WHERE tg_id = ?", (value, tg_id))
+    
+    # user_identifier qaysi ustun ekanini aniqlash
+    if isinstance(user_identifier, int):
+        # avval tg_id bo‘lib ko‘riladi
+        c.execute("SELECT id FROM users WHERE tg_id = ? OR id = ?", (user_identifier, user_identifier))
+        user = c.fetchone()
+        if not user:
+            conn.close()
+            raise ValueError(f"User with identifier {user_identifier} not found")
+        
+        # yangilash
+        c.execute(f"UPDATE users SET {field} = ? WHERE tg_id = ? OR id = ?", (value, user_identifier, user_identifier))
+    
     conn.commit()
     conn.close()
+
 
 def create_payment(user_id, amount, method, proof_file_id):
     conn = get_conn()

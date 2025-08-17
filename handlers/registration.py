@@ -168,7 +168,7 @@ def register_handlers(dp):
         data = await state.get_data()
         lang = data.get("lang", "uz")
 
-        if not age_text.isdigit() or not (1 <= int(age_text) <= 150):
+        if not age_text.isdigit() or not (18 <= int(age_text) <= 150):
             await message.answer(TRANSLATIONS[lang]["invalid_age"])
             return
 
@@ -542,7 +542,7 @@ def register_handlers(dp):
                 await message.answer(TRANSLATIONS[lang][f"invalid_{field}"])
                 return
         elif field == "age":
-            if not new_value.isdigit() or not (1 <= int(new_value) <= 150):
+            if not new_value.isdigit() or not (18 <= int(new_value) <= 150):
                 await message.answer(TRANSLATIONS[lang]["invalid_age"])
                 return
             new_value = int(new_value)

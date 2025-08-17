@@ -33,10 +33,10 @@ async def main() -> None:
         init_db()
         bot = Bot(token=BOT_TOKEN)
         dp = Dispatcher(storage=MemoryStorage())
+        register_admin_handlers(dp)
 
         reg_register(dp)
         await register_payment_handlers(dp)  # Assuming synchronous; use await if async
-        register_admin_handlers(dp)
         await set_default_commands(bot)
 
         logger.info("Bot is starting...")

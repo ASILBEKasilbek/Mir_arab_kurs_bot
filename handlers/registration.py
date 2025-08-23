@@ -408,25 +408,6 @@ def register_handlers(dp):
             await callback.answer(show_alert=True)
             logger.error(f"Error updating course for user {callback.from_user.id}: {str(e)}")
 
-    @dp.callback_query(F.data.startswith("pay_now:"))
-    async def handle_payment(callback: CallbackQuery, state: FSMContext):
-        """Handle payment action for selected course."""
-        course_id = callback.data.replace("pay_now:", "")
-        user = get_user_by_tg(callback.from_user.id)
-        if not user:
-            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
-            await callback.answer()
-            return
-
-        lang = user[2] if user[2] else "uz"
-        course_name = next((c[1] for c in list_courses() if str(c[0]) == course_id), course_id)
-        await callback.message.answer(
-            TRANSLATIONS[lang]["payment_prompt"].format(course=course_name),
-            parse_mode="Markdown"
-        )
-        await callback.answer()
-        logger.info(f"User {callback.from_user.id} initiated payment for course: {course_id}")
-
     @dp.callback_query(F.data == "view_profile")
     async def view_profile(callback: CallbackQuery):
         """Display the user's profile."""

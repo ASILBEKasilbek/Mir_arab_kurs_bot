@@ -98,157 +98,184 @@ def register_admin_handlers(dp):
     @admin_only
     async def view_all_users(callback: CallbackQuery, **kwargs):
         """View all users as an Excel file."""
-        users = get_all_users()
-        if not users:
-            await callback.message.answer("Foydalanuvchilar yo'q.")
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            users = get_all_users()
+            logger.info(f"Fetched {len(users)} users for view_all_users")
+            if not users:
+                await callback.message.answer("Foydalanuvchilar yo'q.")
+                await callback.answer()
+                conn.close()
+                return
+            columns = [
+                'ID',
+                'TG ID',
+                'Til',
+                'Ism',
+                'Familiya',
+                'Tug\'ilgan sana',
+                'Jins',
+                'Telefon',
+                'Manzil',
+                'Pasport oldi',
+                'Pasport orqa',
+                'Kurs ID',
+                'Ro‘yxatdan o‘tgan vaqt',
+                'To‘lov qilinganmi',
+                'To‘lov vaqti',
+                'Guruh xabari ID',
+                'Kurs nomi'
+            ]
+            users_data = []
+            cur = conn.cursor()
+            for user in users:
+                cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
+                course_data = cur.fetchone()
+                course_name = course_data[0] if course_data else "Noma'lum"
+                users_data.append([
+                    user['id'],
+                    user['tg_id'],
+                    user['lang'],
+                    user['first_name'],
+                    user['last_name'],
+                    user['birth_date'],
+                    user['gender'],
+                    user['phone'],
+                    user['address'],
+                    user['passport_front'],
+                    user['passport_back'],
+                    user['course_id'],
+                    user['registered_at'],
+                    user['is_paid'],
+                    user['paid_at'],
+                    user['registration_message_id'],
+                    course_name
+                ])
+            conn.close()
+            buf = await generate_users_excel(users_data, columns)
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='all_users.xlsx'))
             await callback.answer()
-            return
-        columns = [
-            'ID',
-            'TG ID',
-            'Til',
-            'Ism',
-            'Familiya',
-            'Tug\'ilgan sana',
-            'Jins',
-            'Telefon',
-            'Manzil',
-            'Pasport oldi',
-            'Pasport orqa',
-            'Kurs ID',
-            'Ro‘yxatdan o‘tgan vaqt',
-            'To‘lov qilinganmi',
-            'To‘lov vaqti',
-            'Guruh xabari ID',
-            'Kurs nomi'
-        ]
-        users_data = []
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        for user in users:
-            cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
-            course_data = cur.fetchone()
-            course_name = course_data[0] if course_data else "Noma'lum"
-            users_data.append([
-                user['id'],
-                user['tg_id'],
-                user['lang'],
-                user['first_name'],
-                user['last_name'],
-                user['birth_date'],
-                user['gender'],
-                user['phone'],
-                user['address'],
-                user['passport_front'],
-                user['passport_back'],
-                user['course_id'],
-                user['registered_at'],
-                user['is_paid'],
-                user['paid_at'],
-                user['registration_message_id'],
-                course_name
-            ])
-        conn.close()
-        buf = await generate_users_excel(users_data, columns)
-        await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='all_users.xlsx'))
-        await callback.answer()
-        logger.info(f"Admin {callback.from_user.id} viewed all users as Excel.")
+            logger.info(f"Admin {callback.from_user.id} viewed all users as Excel.")
+        except Exception as e:
+            await callback.message.answer(f"Faylni yuborishda xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in view_all_users for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "view_males")
     @admin_only
     async def view_males(callback: CallbackQuery, **kwargs):
         """View male users as an Excel file."""
-        users = get_users_by_gender('erkak')
-        if not users:
-            await callback.message.answer("Erkak foydalanuvchilar yo'q.")
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            users = get_users_by_gender('erkak')
+            logger.info(f"Fetched {len(users)} male users")
+            if not users:
+                await callback.message.answer("Erkak foydalanuvchilar yo'q.")
+                await callback.answer()
+                conn.close()
+                return
+            columns = [
+                'ID',
+                'TG ID',
+                'Til',
+                'Ism',
+                'Familiya',
+                'Tug\'ilgan sana',
+                'Jins',
+                'Telefon',
+                'Manzil',
+                'Kurs ID',
+                'Kurs nomi'
+            ]
+            users_data = []
+            cur = conn.cursor()
+            for user in users:
+                cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
+                course_data = cur.fetchone()
+                course_name = course_data[0] if course_data else "Noma'lum"
+                users_data.append([
+                    user['id'],
+                    user['tg_id'],
+                    user['lang'],
+                    user['first_name'],
+                    user['last_name'],
+                    user['birth_date'],
+                    user['gender'],
+                    user['phone'],
+                    user['address'],
+                    user['course_id'],
+                    course_name
+                ])
+            conn.close()
+            buf = await generate_users_excel(users_data, columns)
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='males.xlsx'))
             await callback.answer()
-            return
-        columns = [
-            'ID',
-            'TG ID',
-            'Til',
-            'Ism',
-            'Familiya',
-            'Tug\'ilgan sana',
-            'Jins',
-            'Telefon',
-            'Manzil',
-            'Kurs ID',
-            'Kurs nomi'
-        ]
-        users_data = []
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        for user in users:
-            cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
-            course_data = cur.fetchone()
-            course_name = course_data[0] if course_data else "Noma'lum"
-            users_data.append([
-                user['id'],
-                user['tg_id'],
-                user['lang'],
-                user['first_name'],
-                user['last_name'],
-                user['birth_date'],
-                user['gender'],
-                user['phone'],
-                user['address'],
-                user['course_id'],
-                course_name
-            ])
-        conn.close()
-        buf = await generate_users_excel(users_data, columns)
-        await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='males.xlsx'))
-        await callback.answer()
-        logger.info(f"Admin {callback.from_user.id} viewed male users as Excel.")
+            logger.info(f"Admin {callback.from_user.id} viewed male users as Excel.")
+        except Exception as e:
+            await callback.message.answer(f"Faylni yuborishda xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in view_males for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "view_females")
     @admin_only
     async def view_females(callback: CallbackQuery, **kwargs):
         """View female users as an Excel file."""
-        users = get_users_by_gender('ayol')
-        if not users:
-            await callback.message.answer("Ayol foydalanuvchilar yo'q.")
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            users = get_users_by_gender('ayol')
+            logger.info(f"Fetched {len(users)} female users")
+            if not users:
+                await callback.message.answer("Ayol foydalanuvchilar yo'q.")
+                await callback.answer()
+                conn.close()
+                return
+            columns = [
+                'ID',
+                'TG ID',
+                'Til',
+                'Ism',
+                'Familiya',
+                'Tug\'ilgan sana',
+                'Jins',
+                'Telefon',
+                'Manzil',
+                'Kurs ID',
+                'Kurs nomi'
+            ]
+            users_data = []
+            cur = conn.cursor()
+            for user in users:
+                cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
+                course_data = cur.fetchone()
+                course_name = course_data[0] if course_data else "Noma'lum"
+                users_data.append([
+                    user['id'],
+                    user['tg_id'],
+                    user['lang'],
+                    user['first_name'],
+                    user['last_name'],
+                    user['birth_date'],
+                    user['gender'],
+                    user['phone'],
+                    user['address'],
+                    user['course_id'],
+                    course_name
+                ])
+            conn.close()
+            buf = await generate_users_excel(users_data, columns)
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='females.xlsx'))
             await callback.answer()
-            return
-        columns = [
-            'ID',
-            'TG ID',
-            'Til',
-            'Ism',
-            'Familiya',
-            'Tug\'ilgan sana',
-            'Jins',
-            'Telefon',
-            'Manzil',
-            'Kurs ID',
-            'Kurs nomi'
-        ]
-        users_data = []
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        for user in users:
-            cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
-            course_data = cur.fetchone()
-            course_name = course_data[0] if course_data else "Noma'lum"
-            users_data.append([
-                user['id'],
-                user['tg_id'],
-                user['lang'],
-                user['first_name'],
-                user['last_name'],
-                user['birth_date'],
-                user['gender'],
-                user['phone'],
-                user['address'],
-                user['course_id'],
-                course_name
-            ])
-        conn.close()
-        buf = await generate_users_excel(users_data, columns)
-        await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='females.xlsx'))
-        await callback.answer()
-        logger.info(f"Admin {callback.from_user.id} viewed female users as Excel.")
+            logger.info(f"Admin {callback.from_user.id} viewed female users as Excel.")
+        except Exception as e:
+            await callback.message.answer(f"Faylni yuborishda xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in view_females for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "view_specific_user")
     @admin_only
@@ -263,13 +290,14 @@ def register_admin_handlers(dp):
     async def view_specific_user(message: Message, state: FSMContext, **kwargs):
         """View details of a specific user by ID."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             user_id = int(message.text.strip())
             user = get_user_by_id(user_id)
             if not user:
                 await message.answer("Foydalanuvchi topilmadi.")
                 await state.clear()
+                conn.close()
                 return
-            conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
             course_data = cur.fetchone()
@@ -292,66 +320,81 @@ def register_admin_handlers(dp):
         except ValueError:
             await message.answer("Iltimos, to'g'ri ID kiriting (raqam).")
             logger.warning(f"Admin {message.from_user.id} entered invalid user ID: {message.text}")
+        except Exception as e:
+            await message.answer(f"Xato yuz berdi: {str(e)}")
+            logger.error(f"Error in view_specific_user for admin {message.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "export_all_excel")
     @admin_only
     async def export_all_excel(callback: CallbackQuery, **kwargs):
         """Export all users as an Excel file."""
-        users = get_all_users()
-        if not users:
-            await callback.message.answer("Foydalanuvchilar yo'q.")
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            users = get_all_users()
+            logger.info(f"Fetched {len(users)} users for export_all_excel")
+            if not users:
+                await callback.message.answer("Foydalanuvchilar yo'q.")
+                await callback.answer()
+                conn.close()
+                return
+            columns = [
+                'ID',
+                'TG ID',
+                'Til',
+                'Ism',
+                'Familiya',
+                'Tug\'ilgan sana',
+                'Jins',
+                'Telefon',
+                'Manzil',
+                'Kurs ID',
+                'Kurs nomi'
+            ]
+            users_data = []
+            cur = conn.cursor()
+            for user in users:
+                cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
+                course_data = cur.fetchone()
+                course_name = course_data[0] if course_data else "Noma'lum"
+                users_data.append([
+                    user['id'],
+                    user['tg_id'],
+                    user['lang'],
+                    user['first_name'],
+                    user['last_name'],
+                    user['birth_date'],
+                    user['gender'],
+                    user['phone'],
+                    user['address'],
+                    user['course_id'],
+                    course_name
+                ])
+            conn.close()
+            buf = await generate_users_excel(users_data, columns)
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='all_users_export.xlsx'))
             await callback.answer()
-            return
-        columns = [
-            'ID',
-            'TG ID',
-            'Til',
-            'Ism',
-            'Familiya',
-            'Tug\'ilgan sana',
-            'Jins',
-            'Telefon',
-            'Manzil',
-            'Kurs ID',
-            'Kurs nomi'
-        ]
-        users_data = []
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        for user in users:
-            cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
-            course_data = cur.fetchone()
-            course_name = course_data[0] if course_data else "Noma'lum"
-            users_data.append([
-                user['id'],
-                user['tg_id'],
-                user['lang'],
-                user['first_name'],
-                user['last_name'],
-                user['birth_date'],
-                user['gender'],
-                user['phone'],
-                user['address'],
-                user['course_id'],
-                course_name
-            ])
-        conn.close()
-        buf = await generate_users_excel(users_data, columns)
-        await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='all_users_export.xlsx'))
-        await callback.answer()
-        logger.info(f"Admin {callback.from_user.id} exported all users as Excel.")
+            logger.info(f"Admin {callback.from_user.id} exported all users as Excel.")
+        except Exception as e:
+            await callback.message.answer(f"Faylni yuborishda xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in export_all_excel for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "adm_pending")
     @admin_only
     async def adm_pending(callback: CallbackQuery, **kwargs):
         """List pending payments."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             rows = list_pending_payments()
             if not rows:
                 await callback.message.answer("Pending to'lovlar yo'q.")
                 await callback.answer()
+                conn.close()
                 return
-
             for r in rows[:10]:
                 buttons = [
                     ("✅ Tasdiqlash", f"pay_approve:{r['id']}:{r['user_id']}"),
@@ -368,23 +411,25 @@ def register_admin_handlers(dp):
                 await callback.message.answer("Ko'proq to'lovlar bor. /morepending bilan davom eting.")
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed pending payments.")
+            conn.close()
         except Exception as e:
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error in adm_pending for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data.startswith("pay_approve:"))
     @admin_only
     async def pay_approve(callback: CallbackQuery, **kwargs):
         """Approve a payment and notify the user."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             _, pid, user_id = callback.data.split(":")
             pid = int(pid)
             user_id = int(user_id)
             set_payment_status(pid, "approved", reviewed_by=callback.from_user.id)
-
             await callback.message.answer(f"To'lov #{pid} tasdiqlandi.")
-
             user = get_user_by_tg(user_id)
             if user:
                 lang = user['lang'] or "uz"
@@ -397,26 +442,27 @@ def register_admin_handlers(dp):
                     logger.info(f"Sent approval notification to user {user['tg_id']} for payment {pid}.")
                 except Exception as e:
                     logger.error(f"Error sending approval notification to user {user['tg_id']}: {str(e)}")
-
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} approved payment {pid}.")
+            conn.close()
         except Exception as e:
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error approving payment for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data.startswith("pay_reject:"))
     @admin_only
     async def pay_reject(callback: CallbackQuery, **kwargs):
         """Reject a payment and notify the user."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             _, pid, user_id = callback.data.split(":")
             pid = int(pid)
             user_id = int(user_id)
             set_payment_status(pid, "rejected", reviewed_by=callback.from_user.id)
-
             await callback.message.answer(f"To'lov #{pid} rad etildi.")
-
             user = get_user_by_tg(user_id)
             if user:
                 lang = user['lang'] or "uz"
@@ -429,19 +475,22 @@ def register_admin_handlers(dp):
                     logger.info(f"Sent rejection notification to user {user['tg_id']} for payment {pid}.")
                 except Exception as e:
                     logger.error(f"Error sending rejection notification to user {user['tg_id']}: {str(e)}")
-
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} rejected payment {pid}.")
+            conn.close()
         except Exception as e:
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error rejecting payment for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "adm_courses")
     @admin_only
     async def adm_courses(callback: CallbackQuery, **kwargs):
         """Kurslar ro'yxatini ko‘rsatish."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             rows = list_courses()
             buttons = []
             if rows:
@@ -463,25 +512,54 @@ def register_admin_handlers(dp):
             await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed courses.")
+            conn.close()
         except Exception as e:
             await callback.message.answer("❌ Kurslar ro‘yxatini yuklashda xatolik yuz berdi. Keyinroq urinib ko‘ring.")
             await callback.answer("Xato", show_alert=True)
-            logger.error(f"Error in adm_courses for admin {callback.from_user.id}: {e}", exc_info=True)
+            logger.error(f"Error in adm_courses for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data.startswith("course_del:"))
     @admin_only
     async def delete_course_cb(callback: CallbackQuery, **kwargs):
         """Kursni ID bo‘yicha o‘chirish."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             course_id = int(callback.data.split(":")[1])
+            # Check if there are users associated with the course
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM users WHERE course_id = ?", (course_id,))
+            user_count = cur.fetchone()[0]
+            if user_count > 0:
+                await callback.message.answer(
+                    f"❌ Kursni o'chirib bo'lmaydi! {user_count} foydalanuvchi ushbu kursga bog'langan. "
+                    "Avval foydalanuvchilarni o'chirish yoki boshqa kursga o'tkazish kerak."
+                )
+                await callback.answer()
+                conn.close()
+                logger.info(f"Admin {callback.from_user.id} attempted to delete course ID {course_id} but {user_count} users are associated.")
+                return
             delete_course(course_id)
             await callback.message.answer(f"✅ Kurs o'chirildi. ID: {course_id}")
             logger.info(f"Admin {callback.from_user.id} deleted course ID: {course_id}")
             await callback.answer()
-        except Exception as e:
-            await callback.message.answer(f"Xato yuz berdi: {str(e)}")
+            conn.close()
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                await callback.message.answer("❌ Ma'lumotlar bazasi band. Iltimos, keyinroq urinib ko'ring.")
+            else:
+                await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error deleting course for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
+        except Exception as e:
+            await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error deleting course for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "course_add")
     @admin_only
@@ -555,71 +633,78 @@ def register_admin_handlers(dp):
     async def add_course_finish(message: Message, state: FSMContext, **kwargs):
         """Finish adding a new course."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             narx = float(message.text.strip())
             if narx < 0:
                 raise ValueError
-        except ValueError:
-            await message.answer("❌ Narx musbat son bo‘lishi kerak. Qayta kiriting:")
-            return
-        await state.update_data(narx=narx)
-        data = await state.get_data()
-        add_course(
-            name=data["name"],
-            description=data["description"],
-            gender=data["gender"],
-            boshlanish_sanasi=data["boshlanish_sanasi"],
-            limit_count=data["limit_count"],
-            narx=data["narx"]
-        )
-        await message.answer(
-            f"✅ Kurs qo‘shildi!\n\n"
-            f"📚 {data['name']}\n"
-            f"📝 {data['description']}\n"
-            f"👥 {data['gender']}\n"
-            f"📦 {data['limit_count']} ta joy\n"
-            f"📅 Boshlanish sanasi: {data['boshlanish_sanasi']}\n"
-            f"💰 Narx: {data['narx']:,} so‘m"
-        )
-        await state.clear()
-        logger.info(f"Admin {message.from_user.id} added course: {data['name']}")
+            await state.update_data(narx=narx)
+            data = await state.get_data()
+            add_course(
+                name=data["name"],
+                description=data["description"],
+                gender=data["gender"],
+                boshlanish_sanasi=data["boshlanish_sanasi"],
+                limit_count=data["limit_count"],
+                narx=data["narx"]
+            )
+            await message.answer(
+                f"✅ Kurs qo‘shildi!\n\n"
+                f"📚 {data['name']}\n"
+                f"📝 {data['description']}\n"
+                f"👥 {data['gender']}\n"
+                f"📦 {data['limit_count']} ta joy\n"
+                f"📅 Boshlanish sanasi: {data['boshlanish_sanasi']}\n"
+                f"💰 Narx: {data['narx']:,} so‘m"
+            )
+            await state.clear()
+            logger.info(f"Admin {message.from_user.id} added course: {data['name']}")
+            conn.close()
+        except Exception as e:
+            await message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            logger.error(f"Error in add_course_finish for admin {message.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "adm_stats")
     @admin_only
     async def adm_stats(callback: CallbackQuery, **kwargs):
         """Show bot statistics."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             s = get_stats()
             text = f"📊 Statistika:\n🎯 Jami foydalanuvchilar: {s['total']}\n💳 To'lov qilganlar: {s['paid']}\n"
             if s['per_course']:
                 text += "📚 Kurslarga bo'linishi:\n"
-                conn = sqlite3.connect(DB_PATH)
                 cur = conn.cursor()
                 for p in s['per_course']:
                     cur.execute("SELECT name FROM courses WHERE id = ?", (p['course_id'],))
                     cn = cur.fetchone()
                     name = cn[0] if cn else "Noma'lum"
                     text += f"- {name}: {p['users_count']}\n"
-                conn.close()
             await callback.message.answer(text)
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed statistics.")
+            conn.close()
         except Exception as e:
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error in adm_stats for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data.startswith("edit_user:"))
     @admin_only
     async def edit_user(callback: CallbackQuery, **kwargs):
         """Edit a user's details."""
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
             user_id = int(callback.data.split(":")[1])
             user = get_user_by_id(user_id)
             if not user:
                 await callback.message.answer("Foydalanuvchi topilmadi.")
                 await callback.answer()
+                conn.close()
                 return
-            conn = sqlite3.connect(DB_PATH)
             cur = conn.cursor()
             cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
             course_data = cur.fetchone()
@@ -640,7 +725,6 @@ def register_admin_handlers(dp):
                 f"Masalan: /edituser {user_id} first_name YangiIsm\n"
                 f"Maydonlar: first_name, last_name, birth_date, gender, phone, course_id"
             )
-
             await callback.message.answer(text)
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed user {user_id} for editing.")
@@ -648,43 +732,51 @@ def register_admin_handlers(dp):
             await callback.message.answer(f"Xato yuz berdi: {str(e)}")
             await callback.answer("Xato", show_alert=True)
             logger.error(f"Error in edit_user for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.message(Command("edituser"))
     @admin_only
     async def edituser_cmd(message: Message, **kwargs):
         """Edit a user's field via command."""
-        parts = message.text.split(maxsplit=3)
-        if len(parts) < 4:
-            await message.reply("Foydalanish: /edituser user_id field value\nMasalan: /edituser 1 first_name YangiIsm")
-            return
-        user_id, field, value = parts[1:4]
-        valid_fields = ["first_name", "last_name", "birth_date", "gender", "phone", "course_id"]
-        if field not in valid_fields:
-            await message.reply(f"To'g'ri maydonni tanlang: {', '.join(valid_fields)}")
-            return
         try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            parts = message.text.split(maxsplit=3)
+            if len(parts) < 4:
+                await message.reply("Foydalanish: /edituser user_id field value\nMasalan: /edituser 1 first_name YangiIsm")
+                conn.close()
+                return
+            user_id, field, value = parts[1:4]
+            valid_fields = ["first_name", "last_name", "birth_date", "gender", "phone", "course_id"]
+            if field not in valid_fields:
+                await message.reply(f"To'g'ri maydonni tanlang: {', '.join(valid_fields)}")
+                conn.close()
+                return
             if field == "birth_date":
                 datetime.strptime(value, "%Y-%m-%d")
             elif field == "gender" and value not in ["erkak", "ayol"]:
                 await message.reply("Jins 'erkak' yoki 'ayol' bo'lishi kerak.")
+                conn.close()
                 return
             elif field == "phone":
                 if not re.match(r"^\+998\d{9}$", value):
                     await message.reply("Telefon raqami +998 bilan boshlanib, 9 ta raqamdan iborat bo'lishi kerak.")
+                    conn.close()
                     return
             elif field == "course_id":
                 value = int(value)
-                conn = sqlite3.connect(DB_PATH)
                 cur = conn.cursor()
                 cur.execute("SELECT id FROM courses WHERE id = ?", (value,))
                 if not cur.fetchone():
                     await message.reply("Bunday kurs mavjud emas.")
                     conn.close()
                     return
-                conn.close()
             update_user_field(int(user_id), field, value)
             await message.reply(f"Foydalanuvchi {user_id} uchun {field} yangilandi: {value}")
             logger.info(f"Admin {message.from_user.id} updated {field} for user {user_id} to {value}.")
+            conn.close()
         except Exception as e:
             await message.reply(f"Xato yuz berdi: {str(e)}")
             logger.error(f"Error in edituser_cmd for admin {message.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()

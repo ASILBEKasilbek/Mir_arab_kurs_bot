@@ -45,8 +45,8 @@ def admin_only(func):
             if isinstance(message_or_callback, Message):
                 await message_or_callback.answer(text)
             elif isinstance(message_or_callback, CallbackQuery):
-                await callback.message.answer(text)
-                await callback.answer(show_alert=True)
+                await message_or_callback.message.answer(text)
+                await message_or_callback.answer(show_alert=True)
             logger.warning(f"Non-admin user {user_id} attempted to access admin function")
             return
         return await func(message_or_callback, *args, **kwargs)

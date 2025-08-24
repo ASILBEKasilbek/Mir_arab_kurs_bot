@@ -481,7 +481,7 @@ def register_handlers(dp):
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"
                 f"{TRANSLATIONS[lang]['course_gender']}: {TRANSLATIONS[lang]['gender_all'] if course['gender'] == 'hammasi' else TRANSLATIONS[lang]['gender_male'] if course['gender'] == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
                 f"{TRANSLATIONS[lang]['start_date']}: {course['boshlanish_sanasi']}\n"
-                f"{TRANSLATIONS[lang]['seats_available']}: {available}/{course['limit_count']}\n"
+                f"{TRANSLATIONS[lang]['seats_available']}: {course['limit_count']-available}/{course['limit_count']}\n"
                 f"{TRANSLATIONS[lang]['price']}: {course['narx']} UZS\n\n"
             )
             buttons.append((course['name'], f"course_{course['id']}"))

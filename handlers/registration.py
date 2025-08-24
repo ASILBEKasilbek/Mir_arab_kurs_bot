@@ -14,7 +14,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 from database import save_user, get_user_by_tg, update_user_field, list_courses
 from config import BOT_TOKEN  # config.py dan BOT_TOKEN import qilindi
-
+from aiogram import types
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -61,8 +61,10 @@ def sanitize_input(text: str) -> str:
     return bleach.clean(text, tags=[], strip=True).strip()
 
 async def send_or_edit_reg_to_group(user: dict, course_name: str, edit_message_id: int = None):
-    """Send or edit user registration data to the group."""
-    lang = user.get("lang", "uz")  # dict bo‘lgani uchun .get ishlatamiz
+    """Send or edit user registration data to the group with photos."""
+
+    lang = user.get("lang", "uz")
+
     text = (
         f"📋 *Foydalanuvchi ma'lumotlari:*\n"
         f"**Ism:** {user.get('first_name','')}\n"
@@ -71,30 +73,49 @@ async def send_or_edit_reg_to_group(user: dict, course_name: str, edit_message_i
         f"**Jins:** {TRANSLATIONS[lang]['gender_male'] if user.get('gender') == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
         f"**Telefon:** {user.get('phone','')}\n"
         f"**Manzil:** {user.get('address','')}\n"
-        f"**Pasport (oldi):** {user.get('passport_front','')}\n"
-        f"**Pasport (orqa):** {user.get('passport_back','')}\n"
         f"**Kurs:** {course_name}\n"
         f"**TG ID:** {user.get('tg_id','')}\n"
         f"**Registratsiya vaqti:** {user.get('registered_at','')}\n"
         f"**To'lov holati:** {TRANSLATIONS[lang]['paid'] if user.get('is_paid') else TRANSLATIONS[lang]['not_paid']}"
     )
+
     try:
-        if edit_message_id:
-            await bot.edit_message_text(
-                text=text,
-                chat_id=REG_GROUP_ID,
-                message_id=edit_message_id,
-                parse_mode="Markdown"
-            )
-            logger.info(f"Updated group message {edit_message_id} for user {user.get('tg_id')}")
+        passport_front = user.get("passport_front")
+        passport_back = user.get("passport_back")
+
+        # Agar rasm bo'lsa
+        if passport_front or passport_back:
+            media = []
+            if passport_front:
+                media.append(types.InputMediaPhoto(media=passport_front, caption=text, parse_mode="Markdown"))
+            if passport_back:
+                # caption faqat birinchi rasmga qo'yiladi
+                media.append(types.InputMediaPhoto(media=passport_back))
+
+            # Edit qilinmaydi, faqat yangi yuboriladi
+            msgs = await bot.send_media_group(chat_id=REG_GROUP_ID, media=media)
+            logger.info(f"Sent media group for user {user.get('tg_id')}")
+            return msgs[0].message_id  # birinchi xabar ID qaytariladi
+
         else:
-            message = await bot.send_message(
-                chat_id=REG_GROUP_ID,
-                text=text,
-                parse_mode="Markdown"
-            )
-            logger.info(f"Sent new group message for user {user.get('tg_id')}")
-            return message.message_id
+            # faqat matn yuboriladi
+            if edit_message_id:
+                await bot.edit_message_text(
+                    text=text,
+                    chat_id=REG_GROUP_ID,
+                    message_id=edit_message_id,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Updated group message {edit_message_id} for user {user.get('tg_id')}")
+            else:
+                message = await bot.send_message(
+                    chat_id=REG_GROUP_ID,
+                    text=text,
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Sent new group message for user {user.get('tg_id')}")
+                return message.message_id
+
     except Exception as e:
         logger.error(f"Error sending/editing message to group for user {user.get('tg_id')}: {str(e)}")
         raise

@@ -7,7 +7,7 @@ from database import get_user_by_tg, create_payment, get_course_by_id, set_payme
 from config import BOT_TOKEN, ADMIN_IDS
 import sqlite3
 bot = Bot(token=BOT_TOKEN)
-
+PAY_GROUP_ID = -1002397524134
 class PaymentStates(StatesGroup):
     await_proof = State()
 
@@ -75,26 +75,41 @@ async def register_payment_handlers(dp):
         await message.answer("✅ Chekingiz qabul qilindi. Admin tasdiqlaguncha kuting.")
         await state.clear()
 
+        # Inline tugmalar (faqat adminlar uchun)
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_{payment_id}")],
+            [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{payment_id}")]
+        ])
+
+        caption_text = (
+            f"📥 Yangi chek!\n"
+            f"ID: {payment_id}\n"
+            f"Kurs: {course['name']}\n"
+            f"Foydalanuvchi: {user['first_name']} {user['last_name']}\n"
+            f"Tg_id: {tg_id}"
+        )
+
         # Adminga yuborish
         for admin in ADMIN_IDS:
             try:
-                kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"approve_{payment_id}")],
-                    [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_{payment_id}")]
-                ])
                 await bot.send_photo(
                     admin,
                     photo=file_id,
-                    caption=(
-                        f"📥 Yangi chek!\n"
-                        f"ID: {payment_id}\n"
-                        f"Foydalanuvchi: {user['first_name']} {user['last_name']}\n"
-                        f"Tg_id: {tg_id}"
-                    ),
+                    caption=caption_text,
                     reply_markup=kb
                 )
             except Exception as e:
                 print("Adminga yuborishda xato:", e)
+
+        # Guruhga yuborish (lekin tugmalarni qo‘ymasdan faqat ma’lumot sifatida)
+        try:
+            await bot.send_photo(
+                PAY_GROUP_ID,
+                photo=file_id,
+                caption=caption_text
+            )
+        except Exception as e:
+            print("Guruhga yuborishda xato:", e)
 
     @dp.callback_query(F.data.startswith("approve_"))
     async def approve_payment(callback: CallbackQuery):

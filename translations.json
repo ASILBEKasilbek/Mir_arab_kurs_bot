@@ -6,7 +6,7 @@
     "no": "❌ Yo‘q",
     "enter_first_name": "Ismingizni kiriting:",
     "enter_last_name": "Familiyangizni kiriting:",
-    "enter_birth_date": "Tug'ilgan sanangizni kiriting (YYYY-MM-DD):",
+    "enter_birth_date": "Tug'ilgan sanangizni kiriting (2005-01-01):",
     "invalid_birth_date": "Noto'g'ri tug'ilgan sana. Iltimos, YYYY-MM-DD formatida kiriting.",
     "choose_gender": "Jinsingizni tanlang:",
     "enter_phone": "Telefon raqamingizni yuboring yoki yozing (masalan: +998901234567):",

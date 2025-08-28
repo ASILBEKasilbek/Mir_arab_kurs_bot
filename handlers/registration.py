@@ -236,9 +236,19 @@ def register_handlers(dp):
 
         try:
             birth_date = datetime.strptime(birth_date_text, "%Y-%m-%d")
-            if birth_date > datetime.now():
+            today = datetime.now()
+
+            if birth_date > today:
                 raise ValueError("Future date")
+
+            # 18 yoshdan kichiklarni tekshirish
+            age = (today - birth_date).days // 365
+            if age < 18:
+                await message.answer("❌ Siz 18 yoshdan kichiksiz. Ro'yxatdan o'tish mumkin emas.")
+                return
+
             await state.update_data(birth_date=birth_date_text)
+
         except ValueError:
             await message.answer(TRANSLATIONS[lang]["invalid_birth_date"])
             return
@@ -251,6 +261,7 @@ def register_handlers(dp):
         kb = create_inline_keyboard(buttons)
         await message.answer(TRANSLATIONS[lang]["choose_gender"], reply_markup=kb)
         await state.set_state(Registration.gender)
+
         logger.info(f"User {message.from_user.id} entered birth date: {birth_date_text}")
 
     @dp.callback_query(Registration.gender, F.data.startswith("gender_"))

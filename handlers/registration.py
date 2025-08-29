@@ -227,7 +227,6 @@ def register_handlers(dp):
         await message.answer(TRANSLATIONS[lang]["enter_birth_date"], reply_markup=kb)
         await state.set_state(Registration.birth_date)
         logger.info(f"User {message.from_user.id} entered last name: {last_name}")
-
     @dp.message(Registration.birth_date)
     async def get_birth_date(message: Message, state: FSMContext):
         birth_date_text = message.text.strip()
@@ -235,7 +234,8 @@ def register_handlers(dp):
         lang = data.get("lang", "uz")
 
         try:
-            birth_date = datetime.strptime(birth_date_text, "%Y-%m-%d")
+            # YYYY.MM.DD formatini tekshirish
+            birth_date = datetime.strptime(birth_date_text, "%Y.%m.%d")
             today = datetime.now()
 
             if birth_date > today:
@@ -250,7 +250,7 @@ def register_handlers(dp):
             await state.update_data(birth_date=birth_date_text)
 
         except ValueError:
-            await message.answer(TRANSLATIONS[lang]["invalid_birth_date"])
+            await message.answer(TRANSLATIONS[lang]["invalid_birth_date"] + " (Masalan: 2005.07.18)")
             return
 
         buttons = [

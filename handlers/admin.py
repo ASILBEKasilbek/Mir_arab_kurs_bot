@@ -826,44 +826,68 @@ def register_admin_handlers(dp):
         await state.update_data(name=message.text.strip())
         await message.answer("📝 Kurs tavsifini kiriting:")
         await state.set_state(AddCourseStates.description)
-
     @dp.message(AddCourseStates.description)
     @admin_only
     async def add_course_description(message: Message, state: FSMContext, **kwargs):
         """Get course description."""
         await state.update_data(description=message.text.strip())
         kb = create_inline_keyboard([
-            ("👨 Erkak", "gender:erkak"),
-            ("👩 Ayol", "gender:ayol"),
-            ("👥 Hammasi", "gender:hammasi")
+            ("👨 Erkak", "course_gender:erkak"),
+            ("👩 Ayol", "course_gender:ayol"),
+            ("👥 Hammasi", "course_gender:hammasi")
         ])
         await message.answer("👥 Qaysi jins uchun mo‘ljallangan?", reply_markup=kb)
+        await state.set_state(AddCourseStates.gender)  # Holatni aniq qilib qo‘yamiz
+        logger.info(f"State set to AddCourseStates.gender for user {message.from_user.id}")
 
-    @dp.callback_query(F.data.startswith("gender:"))
+    @dp.callback_query(F.data.startswith("course_gender:"))
     @admin_only
     async def add_course_gender(callback: CallbackQuery, state: FSMContext, **kwargs):
         """Get course gender."""
-        gender = callback.data.split(":")[1]
-        await state.update_data(gender=gender)
-        await callback.message.answer("📦 Necha joy bo‘lishini kiriting (limit):")
-        await state.set_state(AddCourseStates.limit_count)
-        await callback.answer()
+        try:
+            gender = callback.data.split(":")[1]
+            if gender not in ["erkak", "ayol", "hammasi"]:
+                await callback.message.answer("❌ Noto‘g‘ri jins tanlandi. Iltimos, qaytadan urinib ko‘ring.")
+                await callback.answer()
+                return
+            logger.info(f"Selected course gender: {gender} for user {callback.from_user.id}")
+            await state.update_data(gender=gender)
+            await state.set_state(AddCourseStates.limit_count)
+            logger.info(f"State set to AddCourseStates.limit_count: {await state.get_state()}")
+            await callback.message.answer("📦 Necha joy bo‘lishini kiriting (limit):")
+            await callback.answer()
+        except Exception as e:
+            logger.error(f"Error in add_course_gender for user {callback.from_user.id}: {str(e)}")
+            await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            await state.clear()
 
     @dp.message(AddCourseStates.limit_count)
     @admin_only
     async def add_course_limit_count(message: Message, state: FSMContext, **kwargs):
         """Get course limit count."""
+        current_state = await state.get_state()
+        logger.info(f"Current state in add_course_limit_count: {current_state} for user {message.from_user.id}")
+        if current_state != AddCourseStates.limit_count.state:
+            await message.answer("❌ Noto‘g‘ri holat. Iltimos, qaytadan boshlang (/admin orqali).")
+            await state.clear()
+            return
         try:
             limit_count = int(message.text.strip())
             if limit_count <= 0:
-                raise ValueError
-        except ValueError:
-            await message.answer("❌ Limit butun musbat son bo‘lishi kerak. Qayta kiriting:")
-            return
-        await state.update_data(limit_count=limit_count)
-        await message.answer("📅 Kurs boshlanish sanasini kiriting (YYYY-MM-DD formatida):")
-        await state.set_state(AddCourseStates.boshlanish_sanasi)
-
+                raise ValueError("Limit musbat son bo‘lishi kerak")
+            await state.update_data(limit_count=limit_count)
+            await message.answer("📅 Kurs boshlanish sanasini kiriting (YYYY-MM-DD formatida):")
+            await state.set_state(AddCourseStates.boshlanish_sanasi)
+            logger.info(f"State set to AddCourseStates.boshlanish_sanasi for user {message.from_user.id}")
+        except ValueError as e:
+            await message.answer(f"❌ Noto‘g‘ri qiymat: {str(e)}. Iltimos, butun musbat son kiriting.")
+            logger.warning(f"Invalid limit_count input by user {message.from_user.id}: {message.text}")
+        except Exception as e:
+            await message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            logger.error(f"Error in add_course_limit_count for user {message.from_user.id}: {str(e)}")
+            await state.clear()
+   
     @dp.message(AddCourseStates.boshlanish_sanasi)
     @admin_only
     async def add_course_boshlanish_sanasi(message: Message, state: FSMContext, **kwargs):

@@ -37,8 +37,6 @@ async def main() -> None:
 
         reg_register(dp)
         await register_payment_handlers(dp)  # Assuming synchronous; use await if async
-        await set_default_commands(bot)
-
         logger.info("Bot is starting...")
         await dp.start_polling(bot, polling_timeout=10)
     except Exception as e:

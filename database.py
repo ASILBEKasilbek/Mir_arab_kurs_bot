@@ -66,7 +66,7 @@ def init_db() -> None:
             lang TEXT,
             first_name TEXT,
             last_name TEXT,
-            birth_date TEXT,             -- YYYY-MM-DD
+            birth_date TEXT,             -- YYYY.MM.DD
             gender TEXT,
             phone TEXT,
             address TEXT,                -- manzil
@@ -185,10 +185,6 @@ def get_course_by_id(course_id: int) -> Optional[Dict[str, Any]]:
 # -----------------------------
 
 def save_user(data: Dict[str, Any]) -> int:
-    """Foydalanuvchini saqlaydi. `data` dan mavjud ustunlar olinadi.
-    Qo'llab-quvvatlanadigan kalitlar: tg_id, lang, first_name, last_name, birth_date,
-    gender, phone, address, passport_front, passport_back, course_id, is_paid, paid_at
-    """
     conn = get_conn()
     c = conn.cursor()
 
@@ -449,5 +445,41 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
         """,
         (user_id,),
     ).fetchone()
+    conn.close()
+    return _dict_from_row(row) if row else None
+
+def update_course(
+    course_id: int,
+    name: str,
+    description: Optional[str] = None,
+    gender: str = "hammasi",
+    boshlanish_sanasi: Optional[str] = None,
+    limit_count: int = 0,
+    narx: float = 0.0
+) -> None:
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        """
+        UPDATE courses SET
+            name = ?,
+            description = ?,
+            gender = ?,
+            boshlanish_sanasi = ?,
+            limit_count = ?,
+            narx = ?
+        WHERE id = ?
+        """,
+        (name, description, gender, boshlanish_sanasi, limit_count, narx, course_id)
+    )
+    if c.rowcount == 0:
+        conn.close()
+        raise ValueError(f"Course ID {course_id} does not exist")
+    conn.commit()
+    conn.close()
+    
+def get_course_by_id(course_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM courses WHERE id = ?", (course_id,)).fetchone()
     conn.close()
     return _dict_from_row(row) if row else None

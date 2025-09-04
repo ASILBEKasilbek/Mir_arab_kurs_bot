@@ -7,7 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from database import (
     list_pending_payments, set_payment_status, get_user_by_tg,
     list_courses, add_course, get_stats, update_user_field, get_all_users,
-    get_users_by_gender, get_user_by_id, delete_course
+    get_users_by_gender, get_user_by_id, delete_course,get_course_by_id
 )
 from config import ADMIN_IDS, DB_PATH
 import logging
@@ -27,6 +27,19 @@ class AddCourseStates(StatesGroup):
     boshlanish_sanasi = State()
     limit_count = State()
     narx = State()
+class EditCourseStates(StatesGroup):
+    course_id = State()
+    name = State()
+    description = State()
+    gender = State()
+    boshlanish_sanasi = State()
+    limit_count = State()
+    narx = State()
+
+class EditUserStates(StatesGroup):
+    user_id = State()
+    field = State()
+    value = State()
 
 def create_inline_keyboard(buttons: list, row_width: int = 2) -> InlineKeyboardMarkup:
     """Create an inline keyboard from a list of (text, callback_data) tuples."""
@@ -65,6 +78,7 @@ async def generate_users_excel(users_data, columns) -> BytesIO:
     return buf
 
 def register_admin_handlers(dp):
+
     @dp.message(Command("admin"))
     @admin_only
     async def admin_panel(message: types.Message, *args, **kwargs):
@@ -72,12 +86,248 @@ def register_admin_handlers(dp):
         buttons = [
             ("💳 To'lovlar (pending)", "adm_pending"),
             ("📋 Kurslar", "adm_courses"),
+            ("📝 Kurslarni tahrirlash", "adm_edit_courses"),  # New button for editing courses
             ("👥 Foydalanuvchilar", "adm_users"),
+            ("🧑 Foydalanuvchilarni tahrirlash", "adm_edit_users"),  # New button for editing users
             ("📊 Statistika", "adm_stats")
         ]
-        kb = create_inline_keyboard(buttons)
+        kb = create_inline_keyboard(buttons, row_width=2)
         await message.answer("Admin panel:", reply_markup=kb)
         logger.info(f"Admin {message.from_user.id} accessed admin panel.")
+
+    @dp.callback_query(F.data == "adm_edit_courses")
+    @admin_only
+    async def adm_edit_courses(callback: CallbackQuery, **kwargs):
+        """List courses for editing."""
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            rows = list_courses()
+            buttons = []
+            if rows:
+                text = "📚 *Tahrirlash uchun kursni tanlang:*\n\n" + "\n".join([
+                    f"**{r['id']}.** {r['name']}\n"
+                    f"📝 {r['description']}\n"
+                    f"📅 Boshlanish sanasi: {r['boshlanish_sanasi']}\n"
+                    f"👥 Jins: {r['gender']} | 📦 Joy: {r['joylar_soni']}/{r['limit_count']} ta\n"
+                    for r in rows
+                ])
+                buttons.extend([(f"✏️ {r['name']}", f"edit_course:{r['id']}") for r in rows])
+            else:
+                text = "⚠️ *Hozircha kurslar mavjud emas!*"
+            kb = create_inline_keyboard(buttons)
+            await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.answer()
+            logger.info(f"Admin {callback.from_user.id} viewed courses for editing.")
+            conn.close()
+        except Exception as e:
+            await callback.message.answer(f"❌ Kurslarni yuklashda xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in adm_edit_courses for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
+    USERS_PER_PAGE = 10
+
+    def get_users_page(users, page: int):
+        start = page * USERS_PER_PAGE
+        end = start + USERS_PER_PAGE
+        return users[start:end]
+    def get_course_name(course_id: int) -> str:
+        """Kurs nomini qaytaradi, agar mavjud bo'lmasa 'Noma'lum' qaytaradi."""
+        course = get_course_by_id(course_id)
+        return course["name"] if course else "Noma'lum"
+
+    @dp.callback_query(F.data.startswith("adm_edit_users"))
+    @admin_only
+    async def adm_edit_users(callback: CallbackQuery, **kwargs):
+        try:
+            page = 0
+            if ":" in callback.data:
+                _, page = callback.data.split(":")
+                page = int(page)
+
+            users = get_all_users()
+            if not users:
+                await callback.message.edit_text("⚠️ Foydalanuvchilar mavjud emas!")
+                await callback.answer()
+                return
+
+            text = "🧑 *Tahrirlash uchun foydalanuvchini tanlang:*\n\n"
+            buttons = []
+
+            page_users = get_users_page(users, page)
+            for user in page_users:
+                course_name = get_course_name(user['course_id'])  # alohida funksiya
+                text += f"**ID: {user['id']}** - {user['first_name']} {user['last_name']} ({course_name})\n"
+                buttons.append((f"✏️ {user['first_name']} {user['last_name']}", f"edit_user_select:{user['id']}"))
+
+            # Pagination tugmalari
+            nav_buttons = []
+            if page > 0:
+                nav_buttons.append(("⬅️ Oldingi", f"adm_edit_users:{page-1}"))
+            if (page + 1) * USERS_PER_PAGE < len(users):
+                nav_buttons.append(("Keyingi ➡️", f"adm_edit_users:{page+1}"))
+
+            kb = create_inline_keyboard(buttons + nav_buttons, row_width=1)
+
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.answer()
+
+        except Exception as e:
+            await callback.message.answer(f"❌ Xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+
+    @dp.callback_query(F.data.startswith("edit_user_select:"))
+    @admin_only
+    async def edit_user_select(callback: CallbackQuery, state: FSMContext, **kwargs):
+        """Start editing a selected user."""
+        try:
+            user_id = int(callback.data.split(":")[1])
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            user = get_user_by_id(user_id)
+            if not user:
+                await callback.message.answer("❌ Foydalanuvchi topilmadi.")
+                await callback.answer()
+                conn.close()
+                return
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
+            course_data = cur.fetchone()
+            course_name = course_data[0] if course_data else "Noma'lum"
+            await state.update_data(user_id=user_id)
+            text = (
+                f"🧑 Tahrirlanayotgan foydalanuvchi:\n"
+                f"ID: {user_id}\n"
+                f"Ism: {user['first_name']} {user['last_name']}\n"
+                f"Kurs: {course_name}\n\n"
+                "Tahrirlash mumkin bo'lgan maydonlar:\n"
+                "- first_name: Ism\n"
+                "- last_name: Familiya\n"
+                "- birth_date: Tug'ilgan sana (YYYY-MM-DD)\n"
+                "- gender: Jins (erkak/ayol)\n"
+                "- phone: Telefon (+998xxxxxxxxx)\n"
+                "- course_id: Kurs ID\n\n"
+                "Tahrir qilmoqchi bo'lgan maydonni tanlang:"
+            )
+            buttons = [
+                ("Ism", "field:first_name"),
+                ("Familiya", "field:last_name"),
+                ("Tug'ilgan sana", "field:birth_date"),
+                ("Jins", "field:gender"),
+                ("Telefon", "field:phone"),
+                ("Kurs ID", "field:course_id")
+            ]
+            kb = create_inline_keyboard(buttons, row_width=2)
+            await callback.message.answer(text, reply_markup=kb)
+            await state.set_state(EditUserStates.field)
+            await callback.answer()
+            logger.info(f"Admin {callback.from_user.id} selected user {user_id} for editing.")
+            conn.close()
+        except Exception as e:
+            await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in edit_user_select for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
+
+    @dp.callback_query(F.data.startswith("field:"))
+    @admin_only
+    async def edit_user_field(callback: CallbackQuery, state: FSMContext, **kwargs):
+        """Get the field to edit."""
+        field = callback.data.split(":")[1]
+        await state.update_data(field=field)
+        if field == "gender":
+            kb = create_inline_keyboard([
+                ("Erkak", "gender:erkak"),
+                ("Ayol", "gender:ayol")
+            ])
+            await callback.message.answer("Jinsni tanlang:", reply_markup=kb)
+            await state.set_state(EditUserStates.value)
+        elif field == "course_id":
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            courses = list_courses()
+            if not courses:
+                await callback.message.answer("⚠️ Kurslar mavjud emas!")
+                await state.clear()
+                conn.close()
+                return
+            buttons = [(f"{c['name']} (ID: {c['id']})", f"course_id:{c['id']}") for c in courses]
+            kb = create_inline_keyboard(buttons, row_width=1)
+            await callback.message.answer("Yangi kursni tanlang:", reply_markup=kb)
+            await state.set_state(EditUserStates.value)
+            conn.close()
+        else:
+            field_names = {
+                "first_name": "Ism",
+                "last_name": "Familiya",
+                "birth_date": "Tug'ilgan sana (YYYY-MM-DD formatida)",
+                "phone": "Telefon (+998xxxxxxxxx formatida)"
+            }
+            await callback.message.answer(f"Yangi {field_names[field]} kiriting:")
+            await state.set_state(EditUserStates.value)
+        await callback.answer()
+
+    @dp.callback_query(F.data.startswith(("gender:", "course_id:")))
+    @admin_only
+    async def edit_user_value_callback(callback: CallbackQuery, state: FSMContext, **kwargs):
+        """Handle gender or course_id selection."""
+        try:
+            value = callback.data.split(":")[1]
+            data = await state.get_data()
+            field = data["field"]
+            user_id = data["user_id"]
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            if field == "course_id":
+                value = int(value)
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM courses WHERE id = ?", (value,))
+                if not cur.fetchone():
+                    await callback.message.answer("❌ Bunday kurs mavjud emas.")
+                    await callback.answer()
+                    conn.close()
+                    return
+            update_user_field(user_id, field, value)
+            await callback.message.answer(f"✅ Foydalanuvchi {user_id} uchun {field} yangilandi: {value}")
+            await state.clear()
+            logger.info(f"Admin {callback.from_user.id} updated {field} for user {user_id} to {value}.")
+            conn.close()
+            await callback.answer()
+        except Exception as e:
+            await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in edit_user_value_callback for admin {callback.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
+
+    @dp.message(EditUserStates.value)
+    @admin_only
+    async def edit_user_value(message: Message, state: FSMContext, **kwargs):
+        """Get the new value for the selected field."""
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            value = message.text.strip()
+            data = await state.get_data()
+            field = data["field"]
+            user_id = data["user_id"]
+            if field == "birth_date":
+                datetime.strptime(value, "%Y-%m-%d")
+            elif field == "phone":
+                if not re.match(r"^\+998\d{9}$", value):
+                    await message.answer("❌ Telefon raqami +998 bilan boshlanib, 9 ta raqamdan iborat bo'lishi kerak.")
+                    conn.close()
+                    return
+            update_user_field(user_id, field, value)
+            await message.answer(f"✅ Foydalanuvchi {user_id} uchun {field} yangilandi: {value}")
+            await state.clear()
+            logger.info(f"Admin {message.from_user.id} updated {field} for user {user_id} to {value}.")
+            conn.close()
+        except ValueError as e:
+            await message.answer("❌ Noto'g'ri format. Iltimos, to'g'ri ma'lumot kiriting.")
+            logger.warning(f"Invalid input for {field} by admin {message.from_user.id}: {value}")
+        except Exception as e:
+            await message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            logger.error(f"Error in edit_user_value for admin {message.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
 
     @dp.callback_query(F.data == "adm_users")
     @admin_only
@@ -691,6 +941,8 @@ def register_admin_handlers(dp):
             logger.error(f"Error in adm_stats for admin {callback.from_user.id}: {str(e)}")
             if 'conn' in locals():
                 conn.close()
+    
+
 
     @dp.callback_query(F.data.startswith("edit_user:"))
     @admin_only
@@ -778,5 +1030,140 @@ def register_admin_handlers(dp):
         except Exception as e:
             await message.reply(f"Xato yuz berdi: {str(e)}")
             logger.error(f"Error in edituser_cmd for admin {message.from_user.id}: {str(e)}")
+            if 'conn' in locals():
+                conn.close()
+
+    @dp.callback_query(F.data.startswith("edit_course:"))
+    @admin_only
+    async def edit_course_start(callback: CallbackQuery, state: FSMContext, **kwargs):
+        """Start editing a course."""
+        try:
+            course_id = int(callback.data.split(":")[1])
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            course = get_course_by_id(course_id)
+            conn.close()
+            if not course:
+                await callback.message.answer("❌ Kurs topilmadi.")
+                await callback.answer()
+                return
+            await state.update_data(course_id=course_id)
+            await callback.message.answer(f"📚 Tahrirlanayotgan kurs: {course['name']}\nYangi nom kiriting (hozirgi: {course['name']}):")
+            await state.set_state(EditCourseStates.name)
+            await callback.answer()
+            logger.info(f"Admin {callback.from_user.id} started editing course ID {course_id}.")
+        except Exception as e:
+            await callback.message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in edit_course_start for admin {callback.from_user.id}: {str(e)}")
+
+    @dp.message(EditCourseStates.name)
+    @admin_only
+    async def edit_course_name(message: Message, state: FSMContext, **kwargs):
+        """Get updated course name."""
+        await state.update_data(name=message.text.strip())
+        await message.answer("📝 Yangi tavsif kiriting:")
+        await state.set_state(EditCourseStates.description)
+
+    @dp.message(EditCourseStates.description)
+    @admin_only
+    async def edit_course_description(message: Message, state: FSMContext, **kwargs):
+        """Get updated course description."""
+        await state.update_data(description=message.text.strip())
+        kb = create_inline_keyboard([
+            ("👨 Erkak", "edit_gender:erkak"),
+            ("👩 Ayol", "edit_gender:ayol"),
+            ("👥 Hammasi", "edit_gender:hammasi")
+        ])
+        await message.answer("👥 Qaysi jins uchun mo‘ljallangan?", reply_markup=kb)
+
+    @dp.callback_query(F.data.startswith("edit_gender:"))
+    @admin_only
+    async def edit_course_gender(callback: CallbackQuery, state: FSMContext, **kwargs):
+        """Get updated course gender."""
+        gender = callback.data.split(":")[1]
+        await state.update_data(gender=gender)
+        await callback.message.answer("📦 Yangi joylar limitini kiriting (raqam):")
+        await state.set_state(EditCourseStates.limit_count)
+        await callback.answer()
+
+    @dp.message(EditCourseStates.limit_count)
+    @admin_only
+    async def edit_course_limit_count(message: Message, state: FSMContext, **kwargs):
+        """Get updated course limit count."""
+        try:
+            limit_count = int(message.text.strip())
+            if limit_count <= 0:
+                raise ValueError
+        except ValueError:
+            await message.answer("❌ Limit butun musbat son bo‘lishi kerak. Qayta kiriting:")
+            return
+        await state.update_data(limit_count=limit_count)
+        await message.answer("📅 Yangi boshlanish sanasini kiriting (YYYY-MM-DD formatida):")
+        await state.set_state(EditCourseStates.boshlanish_sanasi)
+
+    @dp.message(EditCourseStates.boshlanish_sanasi)
+    @admin_only
+    async def edit_course_boshlanish_sanasi(message: Message, state: FSMContext, **kwargs):
+        """Get updated course start date."""
+        boshlanish_sanasi = message.text.strip()
+        try:
+            datetime.strptime(boshlanish_sanasi, "%Y-%m-%d")
+        except ValueError:
+            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: YYYY-MM-DD")
+            return
+        await state.update_data(boshlanish_sanasi=boshlanish_sanasi)
+        await message.answer("💰 Yangi narxni kiriting (faqat son, masalan: 250000):")
+        await state.set_state(EditCourseStates.narx)
+
+    @dp.message(EditCourseStates.narx)
+    @admin_only
+    async def edit_course_finish(message: Message, state: FSMContext, **kwargs):
+        """Finish editing a course."""
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=10)
+            narx = float(message.text.strip())
+            if narx < 0:
+                raise ValueError
+            await state.update_data(narx=narx)
+            data = await state.get_data()
+            course_id = data["course_id"]
+            # Update course in database
+            conn.execute(
+                """
+                UPDATE courses SET
+                    name = ?,
+                    description = ?,
+                    gender = ?,
+                    boshlanish_sanasi = ?,
+                    limit_count = ?,
+                    narx = ?
+                WHERE id = ?
+                """,
+                (
+                    data["name"],
+                    data["description"],
+                    data["gender"],
+                    data["boshlanish_sanasi"],
+                    data["limit_count"],
+                    data["narx"],
+                    course_id
+                )
+            )
+            conn.commit()
+            await message.answer(
+                f"✅ Kurs yangilandi!\n\n"
+                f"📚 {data['name']}\n"
+                f"📝 {data['description']}\n"
+                f"👥 {data['gender']}\n"
+                f"📦 {data['limit_count']} ta joy\n"
+                f"📅 Boshlanish sanasi: {data['boshlanish_sanasi']}\n"
+                f"💰 Narx: {data['narx']:,} so‘m"
+            )
+            await state.clear()
+            logger.info(f"Admin {message.from_user.id} edited course ID: {course_id}")
+            conn.close()
+        except Exception as e:
+            await message.answer(f"❌ Xato yuz berdi: {str(e)}")
+            logger.error(f"Error in edit_course_finish for admin {message.from_user.id}: {str(e)}")
             if 'conn' in locals():
                 conn.close()

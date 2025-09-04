@@ -227,6 +227,7 @@ def register_handlers(dp):
         await message.answer(TRANSLATIONS[lang]["enter_birth_date"], reply_markup=kb)
         await state.set_state(Registration.birth_date)
         logger.info(f"User {message.from_user.id} entered last name: {last_name}")
+    
     @dp.message(Registration.birth_date)
     async def get_birth_date(message: Message, state: FSMContext):
         birth_date_text = message.text.strip()
@@ -246,6 +247,8 @@ def register_handlers(dp):
             if age < 18:
                 await message.answer("❌ Siz 18 yoshdan kichiksiz. Ro'yxatdan o'tish mumkin emas.")
                 return
+            
+            birth_date = birth_date.strftime("%Y.%m.%d")
 
             await state.update_data(birth_date=birth_date_text)
 
@@ -668,12 +671,19 @@ def register_handlers(dp):
                 return
         elif field == "birth_date":
             try:
-                birth_date = datetime.strptime(new_value, "%Y-%m-%d")
+                # foydalanuvchi "2005.01.01" formatida kiritadi
+                birth_date = datetime.strptime(new_value, "%Y.%m.%d")
+
                 if birth_date > datetime.now():
                     raise ValueError("Future date")
+
+                # Bazaga nuqta bilan yozib qo'yamiz
+                new_value = birth_date.strftime("%Y.%m.%d")
+
             except ValueError:
                 await message.answer(TRANSLATIONS[lang]["invalid_birth_date"])
                 return
+
         elif field == "phone":
             phone_pattern = r"^\+998\d{9}$"
             if not re.match(phone_pattern, new_value):

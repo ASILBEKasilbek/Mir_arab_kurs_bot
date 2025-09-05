@@ -438,7 +438,7 @@ def register_handlers(dp):
             and course['joylar_soni'] < course['limit_count']
         ]
         if not courses:
-            await callback.message.answer(TRANSLATIONS[lang]["no_courses_available"] + "\nKeyinroq /start bilan qayting va kurs tanlang.")
+            await callback.message.answer(TRANSLATIONS[lang]["no_courses_available"])
             await state.clear()
             await callback.answer()
             logger.info(f"No courses available for user {callback.from_user.id} with gender {user_gender}.")

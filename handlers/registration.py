@@ -258,7 +258,7 @@ def register_handlers(dp):
         await message.answer(TRANSLATIONS[lang]["choose_gender"], reply_markup=kb)
         await state.set_state(Registration.gender)
 
-    logger.info(f"User {message.from_user.id} entered birth date: {birth_date_text}")
+        logger.info(f"User {message.from_user.id} entered birth date: {birth_date_text}")
     @dp.callback_query(Registration.gender, F.data.startswith("gender_"))
     async def choose_gender(callback: CallbackQuery, state: FSMContext):
         gender = callback.data.replace("gender_", "")

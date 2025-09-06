@@ -301,7 +301,6 @@ def register_admin_handlers(dp):
     @dp.message(EditUserStates.value)
     @admin_only
     async def edit_user_value(message: Message, state: FSMContext, **kwargs):
-        """Get the new value for the selected field."""
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             value = message.text.strip()
@@ -309,7 +308,7 @@ def register_admin_handlers(dp):
             field = data["field"]
             user_id = data["user_id"]
             if field == "birth_date":
-                datetime.strptime(value, "%Y-%m-%d")
+                datetime.strptime(value, "%d.%m.%Y")  # Yangi format
             elif field == "phone":
                 if not re.match(r"^\+998\d{9}$", value):
                     await message.answer("❌ Telefon raqami +998 bilan boshlanib, 9 ta raqamdan iborat bo'lishi kerak.")
@@ -321,14 +320,14 @@ def register_admin_handlers(dp):
             logger.info(f"Admin {message.from_user.id} updated {field} for user {user_id} to {value}.")
             conn.close()
         except ValueError as e:
-            await message.answer("❌ Noto'g'ri format. Iltimos, to'g'ri ma'lumot kiriting.")
+            await message.answer("❌ Noto'g'ri format. Iltimos, DD.MM.YYYY formatida sana kiriting.")
             logger.warning(f"Invalid input for {field} by admin {message.from_user.id}: {value}")
         except Exception as e:
             await message.answer(f"❌ Xato yuz berdi: {str(e)}")
             logger.error(f"Error in edit_user_value for admin {message.from_user.id}: {str(e)}")
             if 'conn' in locals():
                 conn.close()
-
+                
     @dp.callback_query(F.data == "adm_users")
     @admin_only
     async def adm_users(callback: CallbackQuery, **kwargs):
@@ -535,10 +534,19 @@ def register_admin_handlers(dp):
         await state.set_state("await_user_id")
         await callback.answer()
 
+    from datetime import datetime
+
+    def format_date(date_str):
+        if date_str:
+            try:
+                return datetime.strptime(date_str, "%d.%m.%Y").strftime("%d.%m.%Y")
+            except ValueError:
+                return date_str
+        return "Noma'lum"
+
     @dp.message(F.state == "await_user_id")
     @admin_only
     async def view_specific_user(message: Message, state: FSMContext, **kwargs):
-        """View details of a specific user by ID."""
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             user_id = int(message.text.strip())
@@ -559,7 +567,7 @@ def register_admin_handlers(dp):
                 f"Til: {user['lang'] or 'Nomaʼlum'}\n"
                 f"Ism: {user['first_name']}\n"
                 f"Familiya: {user['last_name']}\n"
-                f"Tug'ilgan sana: {user['birth_date']}\n"
+                f"Tug'ilgan sana: {format_date(user['birth_date'])}\n"
                 f"Jins: {user['gender']}\n"
                 f"Telefon: {user['phone']}\n"
                 f"Kurs: {course_name}"
@@ -575,7 +583,7 @@ def register_admin_handlers(dp):
             logger.error(f"Error in view_specific_user for admin {message.from_user.id}: {str(e)}")
             if 'conn' in locals():
                 conn.close()
-
+                
     @dp.callback_query(F.data == "export_all_excel")
     @admin_only
     async def export_all_excel(callback: CallbackQuery, **kwargs):
@@ -877,7 +885,7 @@ def register_admin_handlers(dp):
             if limit_count <= 0:
                 raise ValueError("Limit musbat son bo‘lishi kerak")
             await state.update_data(limit_count=limit_count)
-            await message.answer("📅 Kurs boshlanish sanasini kiriting (YYYY-MM-DD formatida):")
+            await message.answer("📅 Kurs boshlanish sanasini kiriting (DD.MM.YYYY formatida(misol: 25.12.2025)):")
             await state.set_state(AddCourseStates.boshlanish_sanasi)
             logger.info(f"State set to AddCourseStates.boshlanish_sanasi for user {message.from_user.id}")
         except ValueError as e:
@@ -891,17 +899,16 @@ def register_admin_handlers(dp):
     @dp.message(AddCourseStates.boshlanish_sanasi)
     @admin_only
     async def add_course_boshlanish_sanasi(message: Message, state: FSMContext, **kwargs):
-        """Get course start date."""
         boshlanish_sanasi = message.text.strip()
         try:
-            datetime.strptime(boshlanish_sanasi, "%Y-%m-%d")
+            datetime.strptime(boshlanish_sanasi, "%d.%m.%Y")  # Yangi format
         except ValueError:
-            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: YYYY-MM-DD")
+            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: DD.MM.YYYY")
             return
         await state.update_data(boshlanish_sanasi=boshlanish_sanasi)
         await message.answer("💰 Kurs narxini kiriting (faqat son, masalan: 250000):")
         await state.set_state(AddCourseStates.narx)
-
+        
     @dp.message(AddCourseStates.narx)
     @admin_only
     async def add_course_finish(message: Message, state: FSMContext, **kwargs):
@@ -1128,12 +1135,11 @@ def register_admin_handlers(dp):
     @dp.message(EditCourseStates.boshlanish_sanasi)
     @admin_only
     async def edit_course_boshlanish_sanasi(message: Message, state: FSMContext, **kwargs):
-        """Get updated course start date."""
         boshlanish_sanasi = message.text.strip()
         try:
-            datetime.strptime(boshlanish_sanasi, "%Y-%m-%d")
+            datetime.strptime(boshlanish_sanasi, "%d.%m.%Y")  # Yangi format
         except ValueError:
-            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: YYYY-MM-DD")
+            await message.answer("❌ Sana formati noto‘g‘ri. To‘g‘ri format: DD.MM.YYYY")
             return
         await state.update_data(boshlanish_sanasi=boshlanish_sanasi)
         await message.answer("💰 Yangi narxni kiriting (faqat son, masalan: 250000):")

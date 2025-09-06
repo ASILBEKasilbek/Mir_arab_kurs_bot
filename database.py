@@ -128,14 +128,21 @@ def init_db() -> None:
 # Courses CRUD
 # -----------------------------
 
+
+
 def add_course(
     name: str,
     description: Optional[str] = None,
     gender: str = "hammasi",
-    boshlanish_sanasi: Optional[str] = None,  # 'YYYY-MM-DD'
+    boshlanish_sanasi: Optional[str] = None,  # 'DD.MM.YYYY'
     limit_count: int = 0,
     narx: float = 0.0,
 ) -> int:
+    if boshlanish_sanasi:
+        try:
+            datetime.strptime(boshlanish_sanasi, "%d.%m.%Y")  # Yangi format
+        except ValueError:
+            raise ValueError("Sana DD.MM.YYYY formatida bo‘lishi kerak")
     conn = get_conn()
     c = conn.cursor()
     c.execute(
@@ -151,7 +158,6 @@ def add_course(
     conn.commit()
     conn.close()
     return course_id
-
 
 def list_courses() -> List[Dict[str, Any]]:
     conn = get_conn()
@@ -184,51 +190,75 @@ def get_course_by_id(course_id: int) -> Optional[Dict[str, Any]]:
 # Users CRUD
 # -----------------------------
 
-def save_user(data: Dict[str, Any]) -> int:
+def get_conn():
+    return sqlite3.connect(DB_PATH, timeout=10)
+
+def save_user(user_data: dict) -> int:
+    try:
+        if user_data.get("birth_date"):
+            try:
+                datetime.strptime(user_data["birth_date"], "%d.%m.%Y")
+            except ValueError:
+                raise ValueError("birth_date must be in DD.MM.YYYY format")
+        
+        conn = get_conn()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO users (
+                tg_id, lang, first_name, last_name, birth_date, gender, phone, 
+                address, passport_front, passport_back, course_id, registered_at, 
+                is_paid, paid_at, registration_message_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_data["tg_id"],
+                user_data.get("lang"),
+                user_data.get("first_name"),
+                user_data.get("last_name"),
+                user_data.get("birth_date"),
+                user_data.get("gender"),
+                user_data.get("phone"),
+                user_data.get("address"),
+                user_data.get("passport_front"),
+                user_data.get("passport_back"),
+                user_data.get("course_id"),
+                user_data.get("registered_at"),
+                user_data.get("is_paid", 0),
+                user_data.get("paid_at"),
+                user_data.get("registration_message_id"),
+            ),
+        )
+        user_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return user_id
+    except Exception as e:
+        if 'conn' in locals():
+            conn.close()
+        raise e
+
+def update_user_field(tg_id: int, field: str, value: str):
+    allowed_fields = [
+        "lang", "first_name", "last_name", "birth_date", "gender", 
+        "phone", "address", "passport_front", "passport_back", 
+        "course_id", "is_paid", "paid_at", "registration_message_id"
+    ]
+    if field not in allowed_fields:
+        raise ValueError(f"Invalid field: {field}")
+    
+    if field == "birth_date":
+        try:
+            datetime.strptime(value, "%d.%m.%Y")
+        except ValueError:
+            raise ValueError("birth_date must be in DD.MM.YYYY format")
+    
     conn = get_conn()
     c = conn.cursor()
-
-    course_id = data.get("course_id")
-    if course_id is not None:
-        row = c.execute("SELECT id FROM courses WHERE id = ?", (course_id,)).fetchone()
-        if not row:
-            conn.close()
-            raise ValueError(f"Course ID {course_id} does not exist")
-
-    fields = [
-        "tg_id",
-        "lang",
-        "first_name",
-        "last_name",
-        "birth_date",
-        "gender",
-        "phone",
-        "address",
-        "passport_front",
-        "passport_back",
-        "course_id",
-        "is_paid",
-        "paid_at",
-        "registration_message_id",
-    ]
-
-    cols = []
-    vals = []
-    for f in fields:
-        if f in data:
-            cols.append(f)
-            vals.append(data.get(f))
-
-    # registered_at default bilan to'ladi, alohida berish shart emas
-    placeholders = ", ".join(["?" for _ in cols])
-    sql = f"INSERT INTO users ({', '.join(cols)}) VALUES ({placeholders})"
-    c.execute(sql, vals)
-    user_id = c.lastrowid
+    c.execute(f"UPDATE users SET {field} = ? WHERE tg_id = ?", (value, tg_id))
     conn.commit()
     conn.close()
-    return user_id
-
-
 def get_user_by_tg(identifier: int) -> Optional[Dict[str, Any]]:
     """identifier: id yoki tg_id (ikkalasidan biri ham bo'lishi mumkin)."""
     conn = get_conn()
@@ -244,59 +274,6 @@ def get_user_by_tg(identifier: int) -> Optional[Dict[str, Any]]:
     conn.close()
     return _dict_from_row(row) if row else None
 
-
-def update_user_field(user_identifier: int, field: str, value: Any) -> None:
-    """
-    user_identifier: tg_id yoki id (int)
-    field: yangilanadigan ustun nomi
-    value: yangi qiymat
-    """
-    allowed_fields = {
-        "lang",
-        "first_name",
-        "last_name",
-        "birth_date",
-        "gender",
-        "phone",
-        "address",
-        "passport_front",
-        "passport_back",
-        "course_id",
-        "registered_at",
-        "is_paid",
-        "paid_at",
-        "registration_message_id",
-    }
-    if field not in allowed_fields:
-        raise ValueError("Invalid field")
-
-    conn = get_conn()
-    c = conn.cursor()
-
-    # course_id tekshiruvi
-    if field == "course_id" and value is not None:
-        row = c.execute("SELECT id FROM courses WHERE id = ?", (value,)).fetchone()
-        if not row:
-            conn.close()
-            raise ValueError(f"Course ID {value} does not exist")
-
-    # Foydalanuvchi mavjudligini tekshirish
-    row = c.execute(
-        "SELECT id FROM users WHERE tg_id = ? OR id = ?",
-        (user_identifier, user_identifier),
-    ).fetchone()
-    if not row:
-        conn.close()
-        raise ValueError(f"User with identifier {user_identifier} not found")
-
-    # Yangilash
-    c.execute(
-        f"UPDATE users SET {field} = ? WHERE tg_id = ? OR id = ?",
-        (value, user_identifier, user_identifier),
-    )
-
-    conn.commit()
-    conn.close()
 
 
 # -----------------------------

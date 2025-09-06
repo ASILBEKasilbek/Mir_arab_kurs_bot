@@ -89,16 +89,11 @@ async def send_or_edit_reg_to_group(user: dict, course_name: str, edit_message_i
             if passport_front:
                 media.append(types.InputMediaPhoto(media=passport_front, caption=text, parse_mode="Markdown"))
             if passport_back:
-                # caption faqat birinchi rasmga qo'yiladi
                 media.append(types.InputMediaPhoto(media=passport_back))
-
-            # Edit qilinmaydi, faqat yangi yuboriladi
             msgs = await bot.send_media_group(chat_id=REG_GROUP_ID, media=media)
             logger.info(f"Sent media group for user {user.get('tg_id')}")
-            return msgs[0].message_id  # birinchi xabar ID qaytariladi
-
+            return msgs[0].message_id
         else:
-            # faqat matn yuboriladi
             if edit_message_id:
                 await bot.edit_message_text(
                     text=text,
@@ -115,7 +110,6 @@ async def send_or_edit_reg_to_group(user: dict, course_name: str, edit_message_i
                 )
                 logger.info(f"Sent new group message for user {user.get('tg_id')}")
                 return message.message_id
-
     except Exception as e:
         logger.error(f"Error sending/editing message to group for user {user.get('tg_id')}: {str(e)}")
         raise
@@ -235,8 +229,8 @@ def register_handlers(dp):
         lang = data.get("lang", "uz")
 
         try:
-            # YYYY.MM.DD formatini tekshirish
-            birth_date = datetime.strptime(birth_date_text, "%Y.%m.%d")
+            # DD.MM.YYYY formatini tekshirish
+            birth_date = datetime.strptime(birth_date_text, "%d.%m.%Y")
             today = datetime.now()
 
             if birth_date > today:
@@ -248,12 +242,11 @@ def register_handlers(dp):
                 await message.answer("❌ Siz 18 yoshdan kichiksiz. Ro'yxatdan o'tish mumkin emas.")
                 return
             
-            birth_date = birth_date.strftime("%Y.%m.%d")
-
+            # Bazaga DD.MM.YYYY formatida saqlash
             await state.update_data(birth_date=birth_date_text)
 
         except ValueError:
-            await message.answer(TRANSLATIONS[lang]["invalid_birth_date"] + " (Masalan: 2005.07.18)")
+            await message.answer(TRANSLATIONS[lang]["invalid_birth_date"])
             return
 
         buttons = [
@@ -265,8 +258,7 @@ def register_handlers(dp):
         await message.answer(TRANSLATIONS[lang]["choose_gender"], reply_markup=kb)
         await state.set_state(Registration.gender)
 
-        logger.info(f"User {message.from_user.id} entered birth date: {birth_date_text}")
-
+    logger.info(f"User {message.from_user.id} entered birth date: {birth_date_text}")
     @dp.callback_query(Registration.gender, F.data.startswith("gender_"))
     async def choose_gender(callback: CallbackQuery, state: FSMContext):
         gender = callback.data.replace("gender_", "")
@@ -495,7 +487,7 @@ def register_handlers(dp):
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"
                 f"{TRANSLATIONS[lang]['course_gender']}: {TRANSLATIONS[lang]['gender_all'] if course['gender'] == 'hammasi' else TRANSLATIONS[lang]['gender_male'] if course['gender'] == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
                 f"{TRANSLATIONS[lang]['start_date']}: {course['boshlanish_sanasi']}\n"
-                f"{TRANSLATIONS[lang]['seats_available']}: {course['limit_count']-available}/{course['limit_count']}\n"
+                f"{TRANSLATIONS[lang]['seats_available']}: {available}/{course['limit_count']}\n"
                 f"{TRANSLATIONS[lang]['price']}: {course['narx']} UZS\n\n"
             )
             buttons.append((course['name'], f"course_{course['id']}"))
@@ -652,7 +644,7 @@ def register_handlers(dp):
             )
             await state.set_state(EditProfile.new_value)
         await callback.answer()
-
+    
     @dp.message(EditProfile.new_value)
     async def update_field(message: Message, state: FSMContext):
         data = await state.get_data()
@@ -671,19 +663,15 @@ def register_handlers(dp):
                 return
         elif field == "birth_date":
             try:
-                # foydalanuvchi "2005.01.01" formatida kiritadi
-                birth_date = datetime.strptime(new_value, "%Y.%m.%d")
-
+                # DD.MM.YYYY formatida kiritiladi
+                birth_date = datetime.strptime(new_value, "%d.%m.%Y")
                 if birth_date > datetime.now():
                     raise ValueError("Future date")
-
-                # Bazaga nuqta bilan yozib qo'yamiz
-                new_value = birth_date.strftime("%Y.%m.%d")
-
+                # Bazaga DD.MM.YYYY formatida saqlash
+                new_value = birth_date.strftime("%d.%m.%Y")
             except ValueError:
                 await message.answer(TRANSLATIONS[lang]["invalid_birth_date"])
                 return
-
         elif field == "phone":
             phone_pattern = r"^\+998\d{9}$"
             if not re.match(phone_pattern, new_value):
@@ -719,7 +707,7 @@ def register_handlers(dp):
         except Exception as e:
             await message.answer(TRANSLATIONS[lang]["error"].format(error=str(e)))
             logger.error(f"Error updating {field} for user {message.from_user.id}: {str(e)}")
-
+    
     @dp.callback_query(EditProfile.new_value, F.data.startswith(("gender_", "course_")))
     async def update_choice_field(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()

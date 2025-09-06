@@ -190,11 +190,11 @@ def get_course_by_id(course_id: int) -> Optional[Dict[str, Any]]:
 # Users CRUD
 # -----------------------------
 
-def get_conn():
-    return sqlite3.connect(DB_PATH, timeout=10)
-
 def save_user(user_data: dict) -> int:
     try:
+        if not isinstance(user_data, dict):
+            raise ValueError("user_data must be a dictionary")
+
         if user_data.get("birth_date"):
             try:
                 datetime.strptime(user_data["birth_date"], "%d.%m.%Y")
@@ -231,6 +231,9 @@ def save_user(user_data: dict) -> int:
             ),
         )
         user_id = c.lastrowid
+        if isinstance(user_id, tuple):
+            user_id = user_id[0]
+
         conn.commit()
         conn.close()
         return user_id
@@ -238,7 +241,7 @@ def save_user(user_data: dict) -> int:
         if 'conn' in locals():
             conn.close()
         raise e
-
+ 
 def update_user_field(tg_id: int, field: str, value: str):
     allowed_fields = [
         "lang", "first_name", "last_name", "birth_date", "gender", 
@@ -259,6 +262,7 @@ def update_user_field(tg_id: int, field: str, value: str):
     c.execute(f"UPDATE users SET {field} = ? WHERE tg_id = ?", (value, tg_id))
     conn.commit()
     conn.close()
+
 def get_user_by_tg(identifier: int) -> Optional[Dict[str, Any]]:
     """identifier: id yoki tg_id (ikkalasidan biri ham bo'lishi mumkin)."""
     conn = get_conn()

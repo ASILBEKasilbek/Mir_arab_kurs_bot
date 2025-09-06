@@ -392,6 +392,7 @@ def register_handlers(dp):
             return
 
         try:
+            # user_data ni dict sifatida aniq shakllantirish
             user_data = {
                 "tg_id": callback.from_user.id,
                 "lang": data.get("lang"),
@@ -409,12 +410,15 @@ def register_handlers(dp):
                 "paid_at": None,
                 "registration_message_id": None
             }
-            save_user(user_data)
+            
+            # user_data ni logging orqali tekshirish
+            logger.debug(f"User data before saving: {user_data}, type: {type(user_data)}")
+            user_id = save_user(user_data)
             user = get_user_by_tg(callback.from_user.id)
             course_name = "Kurs tanlanmagan"
             message_id = await send_or_edit_reg_to_group(user, course_name)
             update_user_field(callback.from_user.id, "registration_message_id", message_id)
-            logger.info(f"User {callback.from_user.id} saved to database and sent to group.")
+            logger.info(f"User {callback.from_user.id} saved to database with ID {user_id} and sent to group.")
         except Exception as e:
             await callback.message.answer(
                 TRANSLATIONS[lang]["error"].format(error=str(e))
@@ -439,7 +443,8 @@ def register_handlers(dp):
         course_text = TRANSLATIONS[lang]["choose_course"] + "\n\n"
         buttons = []
         for course in courses:
-            available = course['limit_count'] - course['joylar_soni']
+            available = course['joylar_soni']
+            print(course['joylar_soni'],course['limit_count'])
             course_text += (
                 f"📚 *{course['name']}*\n"
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"
@@ -456,7 +461,8 @@ def register_handlers(dp):
         await state.set_state(Registration.quran_course)
         await callback.answer()
         logger.info(f"User {callback.from_user.id} proceeded to course selection.")
-
+    
+    
     @dp.callback_query(F.data == "choose_course")
     async def choose_course_prompt(callback: CallbackQuery, state: FSMContext):
         user = get_user_by_tg(callback.from_user.id)
@@ -481,7 +487,8 @@ def register_handlers(dp):
         course_text = TRANSLATIONS[lang]["choose_course"] + "\n\n"
         buttons = []
         for course in courses:
-            available = course['limit_count'] - course['joylar_soni']
+            available = course['joylar_soni']
+            print(course['joylar_soni'],course['limit_count'])
             course_text += (
                 f"📚 *{course['name']}*\n"
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"

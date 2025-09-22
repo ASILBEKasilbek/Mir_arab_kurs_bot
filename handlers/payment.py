@@ -111,6 +111,7 @@ async def register_payment_handlers(dp):
         except Exception as e:
             print("Guruhga yuborishda xato:", e)
 
+
     @dp.callback_query(F.data.startswith("approve_"))
     async def approve_payment(callback: CallbackQuery):
         if callback.from_user.id not in ADMIN_IDS:
@@ -120,16 +121,55 @@ async def register_payment_handlers(dp):
         payment_id = int(callback.data.replace("approve_", ""))
         set_payment_status(payment_id, "approved", callback.from_user.id)
 
-        # Foydalanuvchiga xabar
+        # Foydalanuvchini topamiz
         conn = sqlite3.connect("users.db")
         cur = conn.cursor()
-        cur.execute("SELECT u.tg_id FROM payments p JOIN users u ON p.user_id = u.id WHERE p.id = ?", (payment_id,))
-        tg_id = cur.fetchone()[0]
+        cur.execute("""
+            SELECT u.tg_id, u.lang 
+            FROM payments p 
+            JOIN users u ON p.user_id = u.id 
+            WHERE p.id = ?
+        """, (payment_id,))
+        row = cur.fetchone()
         conn.close()
 
-        await bot.send_message(tg_id, "✅ To'lov tasdiqlandi! Kursga qo'shildingiz.")
+        if not row:
+            await callback.answer("Foydalanuvchi topilmadi.")
+            return
+
+        tg_id, lang = row
+        lang = lang or "uz"
+
+        # Oddiy tasdiq xabari
+        await bot.send_message(
+            tg_id,
+            "✅ To'lov tasdiqlandi! Endi kursga kirishingiz mumkin." if lang == "uz" else
+            "✅ Ваш платеж подтвержден. Теперь вы можете приступить к курсу."
+        )
+
+        # Inline tugmalar
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
+                    callback_data=f"course_start:begin:{payment_id}"
+                ),
+                InlineKeyboardButton(
+                    text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
+                    callback_data=f"course_start:middle:{payment_id}"
+                )
+            ]
+        ])
+
+        await bot.send_message(
+            tg_id,
+            "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
+            reply_markup=keyboard
+        )
+
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.answer("Tasdiqlandi.")
+        await callback.answer("Tasdiqlandi ✅")
+
 
     @dp.callback_query(F.data.startswith("reject_"))
     async def reject_payment(callback: CallbackQuery):
@@ -150,3 +190,4 @@ async def register_payment_handlers(dp):
         await bot.send_message(tg_id, "❌ To'lov rad etildi. Iltimos, qayta urinib ko'ring.")
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.answer("Rad etildi.")
+

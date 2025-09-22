@@ -113,6 +113,10 @@ def init_db() -> None:
 
     if not _column_exists(conn, "users", "registration_message_id"):
         c.execute("ALTER TABLE users ADD COLUMN registration_message_id INTEGER")
+        
+    if not _column_exists(conn, "users", "course_start_option"):
+        c.execute("ALTER TABLE users ADD COLUMN course_start_option TEXT")  
+        # qiymatlar: 'begin', 'middle' va hokazo
 
     # registered_at, created_at defaultlari yo'q bo'lishi mumkin bo'lgan eski bazalar uchun
     # (SQLite da DEFAULT ni ALTER bilan qo'yib bo'lmaydi, shu bois bu yerda faqat mavjud yozuvlar bo'sh bo'lsa to'ldiriladi)

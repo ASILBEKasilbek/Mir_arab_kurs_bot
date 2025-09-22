@@ -41,6 +41,10 @@ class EditUserStates(StatesGroup):
     field = State()
     value = State()
 
+option_map = {
+            "begin": "Boshlanishidan",
+            "middle": "O‘rtasidan"
+        }
 def create_inline_keyboard(buttons: list, row_width: int = 2) -> InlineKeyboardMarkup:
     """Create an inline keyboard from a list of (text, callback_data) tuples."""
     keyboard = [
@@ -336,8 +340,7 @@ def register_admin_handlers(dp):
             ("👥 Hammasi", "view_all_users"),
             ("♂ Erkaklar", "view_males"),
             ("♀ Ayollar", "view_females"),
-            ("🔍 Muayyan foydalanuvchi", "view_specific_user"),
-            ("📥 Excel yuklab olish (hammasi)", "export_all_excel")
+            ("🔍 Muayyan foydalanuvchi", "view_specific_user")
         ]
         kb = create_inline_keyboard(buttons)
         await callback.message.answer("Foydalanuvchilar bo'limi:", reply_markup=kb)
@@ -347,6 +350,7 @@ def register_admin_handlers(dp):
     @admin_only
     async def view_all_users(callback: CallbackQuery, **kwargs):
         """View all users as an Excel file."""
+        global option_map
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_all_users()
@@ -373,7 +377,8 @@ def register_admin_handlers(dp):
                 'To‘lov qilinganmi',
                 'To‘lov vaqti',
                 'Guruh xabari ID',
-                'Kurs nomi'
+                'Kurs nomi',
+                'Kursni qachondan boshlash' 
             ]
             users_data = []
             cur = conn.cursor()
@@ -398,7 +403,8 @@ def register_admin_handlers(dp):
                     user['is_paid'],
                     user['paid_at'],
                     user['registration_message_id'],
-                    course_name
+                    course_name,
+                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
@@ -416,6 +422,7 @@ def register_admin_handlers(dp):
     @admin_only
     async def view_males(callback: CallbackQuery, **kwargs):
         """View male users as an Excel file."""
+        global option_map
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_users_by_gender('erkak')
@@ -436,7 +443,8 @@ def register_admin_handlers(dp):
                 'Telefon',
                 'Manzil',
                 'Kurs ID',
-                'Kurs nomi'
+                'Kurs nomi',
+                'Kursni qachondan boshlash'
             ]
             users_data = []
             cur = conn.cursor()
@@ -444,6 +452,7 @@ def register_admin_handlers(dp):
                 cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
+                print(user)
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -455,7 +464,8 @@ def register_admin_handlers(dp):
                     user['phone'],
                     user['address'],
                     user['course_id'],
-                    course_name
+                    course_name,
+                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
@@ -473,6 +483,7 @@ def register_admin_handlers(dp):
     @admin_only
     async def view_females(callback: CallbackQuery, **kwargs):
         """View female users as an Excel file."""
+        global option_map
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_users_by_gender('ayol')
@@ -493,7 +504,8 @@ def register_admin_handlers(dp):
                 'Telefon',
                 'Manzil',
                 'Kurs ID',
-                'Kurs nomi'
+                'Kurs nomi',
+                'Kursni qachondan boshlash'
             ]
             users_data = []
             cur = conn.cursor()
@@ -512,7 +524,8 @@ def register_admin_handlers(dp):
                     user['phone'],
                     user['address'],
                     user['course_id'],
-                    course_name
+                    course_name,
+                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
@@ -688,18 +701,40 @@ def register_admin_handlers(dp):
             user_id = int(user_id)
             set_payment_status(pid, "approved", reviewed_by=callback.from_user.id)
             await callback.message.answer(f"To'lov #{pid} tasdiqlandi.")
+            
             user = get_user_by_tg(user_id)
             if user:
                 lang = user['lang'] or "uz"
                 try:
+                    # Foydalanuvchiga oddiy tasdiq xabarini yuborish
                     await callback.message.bot.send_message(
                         user['tg_id'], 
                         "✅ To'lovingiz tasdiqlandi. Endi kursga kirishingiz mumkin." if lang == "uz" else
                         "✅ Ваш платеж подтвержден. Теперь вы можете приступить к курсу."
                     )
-                    logger.info(f"Sent approval notification to user {user['tg_id']} for payment {pid}.")
+
+                    # Inline tugmalar bilan qo'shimcha xabar
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
+                                callback_data=f"course_start:begin:{pid}"
+                            ),
+                            InlineKeyboardButton(
+                                text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
+                                callback_data=f"course_start:middle:{pid}"
+                            )
+                        ]
+                    ])
+                    await callback.message.bot.send_message(
+                        user['tg_id'],
+                        "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
+                        reply_markup=keyboard
+                    )
+                    logger.info(f"Sent approval + course start choice to user {user['tg_id']} for payment {pid}.")
                 except Exception as e:
                     logger.error(f"Error sending approval notification to user {user['tg_id']}: {str(e)}")
+
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} approved payment {pid}.")
             conn.close()

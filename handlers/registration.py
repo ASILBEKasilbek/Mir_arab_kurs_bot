@@ -12,7 +12,7 @@ from aiogram.types import (
 )
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
-from database import save_user, get_user_by_tg, update_user_field, list_courses
+from database import get_conn, save_user, get_user_by_tg, update_user_field, list_courses
 from config import BOT_TOKEN  # config.py dan BOT_TOKEN import qilindi
 from aiogram import types
 # Configure logging
@@ -495,8 +495,8 @@ def register_handlers(dp):
                 f"{TRANSLATIONS[lang]['course_gender']}: {TRANSLATIONS[lang]['gender_all'] if course['gender'] == 'hammasi' else TRANSLATIONS[lang]['gender_male'] if course['gender'] == 'erkak' else TRANSLATIONS[lang]['gender_female']}\n"
                 f"{TRANSLATIONS[lang]['start_date']}: {course['boshlanish_sanasi']}\n"
                 f"{TRANSLATIONS[lang]['seats_available']}: {available}/{course['limit_count']}\n"
-                f"{TRANSLATIONS[lang]['price']}: {course['narx']} UZS\n\n"
-            )
+                f"{TRANSLATIONS[lang]['price']}: {course['narx']} UZS\n\n")
+    
             buttons.append((course['name'], f"course_{course['id']}"))
 
         buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
@@ -755,3 +755,40 @@ def register_handlers(dp):
         await state.clear()
         await callback.answer()
         logger.info(f"User {callback.from_user.id} canceled action.")
+    @dp.callback_query(F.data.startswith("course_start:"))
+    async def course_start_handler(callback: CallbackQuery):
+        try:
+            _, option, pid = callback.data.split(":")  # option = begin/middle
+            pid = int(pid)
+
+            # paymentdan userni topamiz
+            conn = get_conn()
+            c = conn.cursor()
+            c.execute("SELECT user_id FROM payments WHERE id = ?", (pid,))
+            row = c.fetchone()
+            if not row:
+                await callback.message.answer("❌ To'lov topilmadi.")
+                return
+            user_id = row[0]
+
+            # foydalanuvchiga tanlovini saqlaymiz
+            c.execute("UPDATE users SET course_start_option = ? WHERE id = ?", (option, user_id))
+            conn.commit()
+            conn.close()
+
+            if option == "begin":
+                text = "📖 Kurs boshidan boshlanadi."
+            elif option == "middle":
+                text = "⏩ Kurs o‘rtadan boshlanadi."
+            else:
+                text = "⚠️ Noma'lum tanlov."
+
+            await callback.message.answer(text)
+            await callback.answer("✅ Tanlovingiz qabul qilindi.", show_alert=True)
+
+            logger.info(f"User {user_id} ({callback.from_user.id}) chose {option} for course {pid}.")
+
+        except Exception as e:
+            await callback.message.answer(f"Xato: {str(e)}")
+            await callback.answer("Xato", show_alert=True)
+            logger.error(f"Error in course_start_handler: {str(e)}")

@@ -123,6 +123,12 @@ def init_db() -> None:
     c.execute("UPDATE users SET registered_at = COALESCE(registered_at, datetime('now'))")
     c.execute("UPDATE payments SET created_at = COALESCE(created_at, datetime('now'))")
     c.execute("UPDATE courses SET created_at = COALESCE(created_at, datetime('now'))")
+    if not _column_exists(conn, "users", "start_type"):
+        c.execute("ALTER TABLE users ADD COLUMN start_type TEXT")
+    if not _column_exists(conn, "users", "start_month"):
+        c.execute("ALTER TABLE users ADD COLUMN start_month TEXT")
+
+
 
     conn.commit()
     conn.close()
@@ -250,8 +256,11 @@ def update_user_field(tg_id: int, field: str, value: str):
     allowed_fields = [
         "lang", "first_name", "last_name", "birth_date", "gender", 
         "phone", "address", "passport_front", "passport_back", 
-        "course_id", "is_paid", "paid_at", "registration_message_id"
+        "course_id", "is_paid", "paid_at", "registration_message_id",
+        "start_type", "start_month"
     ]
+
+
     if field not in allowed_fields:
         raise ValueError(f"Invalid field: {field}")
     

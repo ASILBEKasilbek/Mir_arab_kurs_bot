@@ -43,6 +43,8 @@ class Registration(StatesGroup):
     passport_back = State()
     data_confirm = State()
     quran_course = State()
+    confirm_start = State()
+    choose_month = State()
 
 class EditProfile(StatesGroup):
     field = State()
@@ -372,6 +374,7 @@ def register_handlers(dp):
         await state.set_state(Registration.data_confirm)
         logger.info(f"User {message.from_user.id} uploaded passport back: {file_id}")
 
+
     @dp.callback_query(Registration.data_confirm, F.data.startswith("data_"))
     async def confirm_data(callback: CallbackQuery, state: FSMContext):
         choice = callback.data.replace("data_", "")
@@ -416,7 +419,8 @@ def register_handlers(dp):
             user_id = save_user(user_data)
             user = get_user_by_tg(callback.from_user.id)
             course_name = "Kurs tanlanmagan"
-            message_id = await send_or_edit_reg_to_group(user, course_name)
+            # message_id = await send_or_edit_reg_to_group(user, course_name)
+            message_id="1234"
             update_user_field(callback.from_user.id, "registration_message_id", message_id)
             logger.info(f"User {callback.from_user.id} saved to database with ID {user_id} and sent to group.")
         except Exception as e:
@@ -488,7 +492,6 @@ def register_handlers(dp):
         buttons = []
         for course in courses:
             available = course['joylar_soni']
-            print(course['joylar_soni'],course['limit_count'])
             course_text += (
                 f"📚 *{course['name']}*\n"
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"
@@ -506,41 +509,155 @@ def register_handlers(dp):
         await callback.answer()
         logger.info(f"User {callback.from_user.id} prompted to choose course.")
 
+    # @dp.callback_query(Registration.quran_course, F.data.startswith("course_"))
+    # async def choose_course(callback: CallbackQuery, state: FSMContext):
+    #     course_id = int(callback.data.replace("course_", ""))
+    #     user = get_user_by_tg(callback.from_user.id)
+    #     if not user:
+    #         await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
+    #         await callback.answer()
+    #         return
+
+    #     lang = user['lang'] if user['lang'] else "uz"
+    #     try:
+    #         update_user_field(callback.from_user.id, "course_id", course_id)
+    #         course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), str(course_id))
+    #         user = get_user_by_tg(callback.from_user.id)
+    #         reg_message_id = user['registration_message_id']
+    #         await send_or_edit_reg_to_group(user, course_name, reg_message_id)
+    #         buttons = [
+    #             (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}"),
+    #             (TRANSLATIONS[lang]["cancel"], "cancel")
+    #         ]
+    #         kb = create_inline_keyboard(buttons)
+    #         await callback.message.answer(
+    #             TRANSLATIONS[lang]["course_selected"].format(course=course_name),
+    #             reply_markup=kb,
+    #             parse_mode="Markdown"
+    #         )
+    #         await state.clear()
+    #         await callback.answer()
+    #         logger.info(f"User {callback.from_user.id} selected course: {course_id} and updated group post.")
+    #     except Exception as e:
+    #         await callback.message.answer(
+    #             TRANSLATIONS[lang]["error"].format(error=str(e))
+    #         )
+    #         await callback.answer(show_alert=True)
+    #         logger.error(f"Error updating course for user {callback.from_user.id}: {str(e)}")
+
     @dp.callback_query(Registration.quran_course, F.data.startswith("course_"))
     async def choose_course(callback: CallbackQuery, state: FSMContext):
         course_id = int(callback.data.replace("course_", ""))
         user = get_user_by_tg(callback.from_user.id)
         if not user:
-            await callback.message.answer(TRANSLATIONS["uz"]["user_not_found"])
+            await callback.message.answer("❌ Foydalanuvchi topilmadi.")
             await callback.answer()
             return
 
         lang = user['lang'] if user['lang'] else "uz"
-        try:
-            update_user_field(callback.from_user.id, "course_id", course_id)
-            course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), str(course_id))
-            user = get_user_by_tg(callback.from_user.id)
-            reg_message_id = user['registration_message_id']
-            await send_or_edit_reg_to_group(user, course_name, reg_message_id)
-            buttons = [
-                (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}"),
-                (TRANSLATIONS[lang]["cancel"], "cancel")
-            ]
-            kb = create_inline_keyboard(buttons)
-            await callback.message.answer(
-                TRANSLATIONS[lang]["course_selected"].format(course=course_name),
-                reply_markup=kb,
-                parse_mode="Markdown"
-            )
-            await state.clear()
+
+        # Bazaga course_id saqlab qo‘yamiz
+        update_user_field(callback.from_user.id, "course_id", course_id)
+
+        # Kurs nomini chiqaramiz
+        course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), str(course_id))
+
+        # Boshidanmi yoki keyinmi deb so‘raymiz
+        buttons = [
+            ("✅ Ha, boshidan", f"start_yes:{course_id}"),
+            ("❌ Yo‘q, keyinroq", f"start_no:{course_id}")
+        ]
+        kb = create_inline_keyboard(buttons)
+        await callback.message.answer(
+            f"📚 Siz *{course_name}* kursini tanladingiz.\n\nKursni boshidan boshlaysizmi?",
+            reply_markup=kb, parse_mode="Markdown"
+        )
+        await state.set_state(Registration.confirm_start)
+        await callback.answer()
+        
+
+    @dp.callback_query(Registration.confirm_start, F.data.startswith("start_yes"))
+    async def start_from_begin(callback: CallbackQuery, state: FSMContext):
+        course_id = int(callback.data.split(":")[1])
+        update_user_field(callback.from_user.id, "start_type", "boshidan")
+
+        # To‘lov bosqichiga o‘tkazamiz
+        course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), str(course_id))
+        buttons = [
+            (f"💳 To‘lov qilish ({course_name})", f"pay_now:{course_id}"),
+            ("❌ Bekor qilish", "cancel")
+        ]
+        kb = create_inline_keyboard(buttons)
+
+        await callback.message.answer(
+            f"✅ Kursni boshidan boshlash qabul qilindi.\n\n"
+            f"Endi kurs uchun to‘lovni amalga oshiring 👇",
+            reply_markup=kb
+        )
+
+        await state.clear()
+        await callback.answer()
+
+    from calendar import month_name
+
+    @dp.callback_query(Registration.confirm_start, F.data.startswith("start_no"))
+    async def start_from_month(callback: CallbackQuery, state: FSMContext):
+        course_id = int(callback.data.split(":")[1])
+        # Kurs ma’lumotini olamiz
+        course = next((c for c in list_courses() if c['id'] == course_id), None)
+        if not course:
+            await callback.message.answer("❌ Kurs topilmadi.")
             await callback.answer()
-            logger.info(f"User {callback.from_user.id} selected course: {course_id} and updated group post.")
-        except Exception as e:
-            await callback.message.answer(
-                TRANSLATIONS[lang]["error"].format(error=str(e))
-            )
-            await callback.answer(show_alert=True)
-            logger.error(f"Error updating course for user {callback.from_user.id}: {str(e)}")
+            return
+
+        # Kurs boshlanish sanasini datetime ga o‘tkazamiz
+        start_date = datetime.strptime(course['boshlanish_sanasi'], "%d.%m.%Y")
+
+        # Boshlanish oyi + keyingi 2 oy
+        months = [start_date.month, (start_date.month % 12) + 1, ((start_date.month + 1) % 12) + 1]
+        year = start_date.year
+
+        # Inline tugmalar yasaymiz
+        buttons = [(month_name[m], f"month_{m}_{year}") for m in months]
+        kb = create_inline_keyboard(buttons, row_width=2)
+
+        await callback.message.answer(
+            "📅 Qaysi oydan boshlashni tanlang:", reply_markup=kb
+        )
+        await state.set_state(Registration.choose_month)
+        await callback.answer()
+
+
+
+
+    @dp.callback_query(Registration.choose_month, F.data.startswith("month_"))
+    async def save_month_choice(callback: CallbackQuery, state: FSMContext):
+        _, month, year = callback.data.split("_")
+        month, year = int(month), int(year)
+
+        update_user_field(callback.from_user.id, "start_month", f"{month:02d}.{year}")
+
+        # Kursni olish
+        user = get_user_by_tg(callback.from_user.id)
+        course_id = user['course_id']
+        course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), str(course_id))
+
+        # To‘lov tugmalari
+        buttons = [
+            (f"💳 To‘lov qilish ({course_name})", f"pay_now:{course_id}"),
+            ("❌ Bekor qilish", "cancel")
+        ]
+        kb = create_inline_keyboard(buttons)
+
+        await callback.message.answer(
+            f"✅ Siz {month_name[month]} {year}-yildan kursni boshlashni tanladingiz.\n\n"
+            f"Endi kurs uchun to‘lovni amalga oshiring 👇",
+            reply_markup=kb
+        )
+
+        await state.clear()
+        await callback.answer()
+
 
     @dp.callback_query(F.data == "view_profile")
     async def view_profile(callback: CallbackQuery):
@@ -700,7 +817,7 @@ def register_handlers(dp):
             is_paid = user['is_paid']
             course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), TRANSLATIONS[lang]["no_course"])
             reg_message_id = user['registration_message_id']
-            await send_or_edit_reg_to_group(user, course_name, reg_message_id)
+            # await send_or_edit_reg_to_group(user, course_name, reg_message_id)
             buttons = [
                 (TRANSLATIONS[lang]["choose_course"], "choose_course") if not course_id or not is_paid else None,
                 (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}") if course_id and not is_paid else None,
@@ -730,7 +847,7 @@ def register_handlers(dp):
             is_paid = user['is_paid']
             course_name = next((c['name'] for c in list_courses() if c['id'] == course_id), TRANSLATIONS[lang]["no_course"])
             reg_message_id = user['registration_message_id']
-            await send_or_edit_reg_to_group(user, course_name, reg_message_id)
+            # await send_or_edit_reg_to_group(user, course_name, reg_message_id)
             buttons = [
                 (TRANSLATIONS[lang]["choose_course"], "choose_course") if not course_id or not is_paid else None,
                 (f"{TRANSLATIONS[lang]['pay_now']} ({course_name})", f"pay_now:{course_id}") if course_id and not is_paid else None,
@@ -755,6 +872,7 @@ def register_handlers(dp):
         await state.clear()
         await callback.answer()
         logger.info(f"User {callback.from_user.id} canceled action.")
+    
     @dp.callback_query(F.data.startswith("course_start:"))
     async def course_start_handler(callback: CallbackQuery):
         try:

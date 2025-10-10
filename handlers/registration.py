@@ -574,7 +574,7 @@ def register_handlers(dp):
         )
         await state.set_state(Registration.confirm_start)
         await callback.answer()
-        
+
 
     @dp.callback_query(Registration.confirm_start, F.data.startswith("start_yes"))
     async def start_from_begin(callback: CallbackQuery, state: FSMContext):
@@ -628,8 +628,6 @@ def register_handlers(dp):
         await callback.answer()
 
 
-
-
     @dp.callback_query(Registration.choose_month, F.data.startswith("month_"))
     async def save_month_choice(callback: CallbackQuery, state: FSMContext):
         _, month, year = callback.data.split("_")
@@ -657,7 +655,6 @@ def register_handlers(dp):
 
         await state.clear()
         await callback.answer()
-
 
     @dp.callback_query(F.data == "view_profile")
     async def view_profile(callback: CallbackQuery):
@@ -872,41 +869,3 @@ def register_handlers(dp):
         await state.clear()
         await callback.answer()
         logger.info(f"User {callback.from_user.id} canceled action.")
-    
-    @dp.callback_query(F.data.startswith("course_start:"))
-    async def course_start_handler(callback: CallbackQuery):
-        try:
-            _, option, pid = callback.data.split(":")  # option = begin/middle
-            pid = int(pid)
-
-            # paymentdan userni topamiz
-            conn = get_conn()
-            c = conn.cursor()
-            c.execute("SELECT user_id FROM payments WHERE id = ?", (pid,))
-            row = c.fetchone()
-            if not row:
-                await callback.message.answer("❌ To'lov topilmadi.")
-                return
-            user_id = row[0]
-
-            # foydalanuvchiga tanlovini saqlaymiz
-            c.execute("UPDATE users SET course_start_option = ? WHERE id = ?", (option, user_id))
-            conn.commit()
-            conn.close()
-
-            if option == "begin":
-                text = "📖 Kurs boshidan boshlanadi."
-            elif option == "middle":
-                text = "⏩ Kurs o‘rtadan boshlanadi."
-            else:
-                text = "⚠️ Noma'lum tanlov."
-
-            await callback.message.answer(text)
-            await callback.answer("✅ Tanlovingiz qabul qilindi.", show_alert=True)
-
-            logger.info(f"User {user_id} ({callback.from_user.id}) chose {option} for course {pid}.")
-
-        except Exception as e:
-            await callback.message.answer(f"Xato: {str(e)}")
-            await callback.answer("Xato", show_alert=True)
-            logger.error(f"Error in course_start_handler: {str(e)}")

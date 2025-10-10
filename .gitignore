@@ -17,6 +17,8 @@ ENV/
 .env
 # VSCode
 .vscode/
+*.db-shm
+*.db-wal
 
 # MacOS
 .DS_Store

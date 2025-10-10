@@ -354,6 +354,7 @@ def register_admin_handlers(dp):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_all_users()
+            months = {"01": "Yanvar", "02": "Fevral", "03": "Mart", "04": "Aprel", "05": "May", "06": "Iyun", "07": "Iyul", "08": "Avgust", "09": "Sentyabr", "10": "Oktyabr", "11": "Noyabr", "12": "Dekabr"}    
             logger.info(f"Fetched {len(users)} users for view_all_users")
             if not users:
                 await callback.message.answer("Foydalanuvchilar yo'q.")
@@ -370,22 +371,50 @@ def register_admin_handlers(dp):
                 'Jins',
                 'Telefon',
                 'Manzil',
-                'Pasport oldi',
-                'Pasport orqa',
-                'Kurs ID',
                 'Ro‘yxatdan o‘tgan vaqt',
                 'To‘lov qilinganmi',
                 'To‘lov vaqti',
-                'Guruh xabari ID',
-                'Kurs nomi',
+                'Kurs nomi',                
                 'Kursni qachondan boshlash' 
             ]
             users_data = []
             cur = conn.cursor()
+            from datetime import datetime
             for user in users:
                 cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
+                user["is_paid"]="Yo'q"
+                if user["is_paid"]==1:
+                    user["is_paid"]="Ha"
+                raw_paid_at = user.get("paid_at")   # masalan: "2025-10-10T01:36:50.813312"
+                paid_at_display = ""
+                is_paid = user.get('is_paid', 0)
+                if user["start_month"]=="NULL":
+                    start_info = "Tanlanmagan" 
+                elif user.get("start_month"):  
+                    month_str, year_str = user["start_month"].split(".")  # masalan "04", "2025"
+                    start_info = f"{months[month_str]} {year_str}"        # "Aprel 2025"
+                elif user.get("start_type") and str(user["start_type"]).strip() not in ("", "None", "0"):
+                    start_info = user["start_type"]    
+                else:
+                    start_info = "Tanlanmagan"  
+
+                if is_paid and raw_paid_at:
+                    try:
+                        dt = datetime.fromisoformat(raw_paid_at)  
+                        day = str(dt.day).zfill(2)      # "10"
+                        month = str(dt.month).zfill(2)  # "10"
+                        year = str(dt.year)             # "2025"
+                        time_part = dt.strftime("%H:%M")  # "01:36"
+                        
+                        # Uzbekcha format
+                        paid_at_display = f"{day} {months[month]} {year} {time_part}"
+                    except Exception:
+                        paid_at_display = str(raw_paid_at)
+                else:
+                    paid_at_display = "To‘lov qilinmagan"
+                   
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -396,19 +425,15 @@ def register_admin_handlers(dp):
                     user['gender'],
                     user['phone'],
                     user['address'],
-                    user['passport_front'],
-                    user['passport_back'],
-                    user['course_id'],
                     user['registered_at'],
                     user['is_paid'],
-                    user['paid_at'],
-                    user['registration_message_id'],
+                    paid_at_display,
                     course_name,
-                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
+                    start_info
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
-            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='all_users.xlsx'))
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='Hamma_foydalanuvchi.xlsx'))
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed all users as Excel.")
         except Exception as e:
@@ -426,6 +451,8 @@ def register_admin_handlers(dp):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_users_by_gender('erkak')
+            months = {"01": "Yanvar", "02": "Fevral", "03": "Mart", "04": "Aprel", "05": "May", "06": "Iyun", "07": "Iyul", "08": "Avgust", "09": "Sentyabr", "10": "Oktyabr", "11": "Noyabr", "12": "Dekabr"}
+
             logger.info(f"Fetched {len(users)} male users")
             if not users:
                 await callback.message.answer("Erkak foydalanuvchilar yo'q.")
@@ -452,7 +479,15 @@ def register_admin_handlers(dp):
                 cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
-                print(user)
+                if user["start_month"]=="NULL":
+                    start_info = "Tanlanmagan" 
+                elif user.get("start_month"):  
+                    month_str, year_str = user["start_month"].split(".")  # masalan "04", "2025"
+                    start_info = f"{months[month_str]} {year_str}"        # "Aprel 2025"
+                elif user.get("start_type") and str(user["start_type"]).strip() not in ("", "None", "0"):
+                    start_info = user["start_type"]    
+                else:
+                    start_info = "Tanlanmagan"  
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -465,11 +500,11 @@ def register_admin_handlers(dp):
                     user['address'],
                     user['course_id'],
                     course_name,
-                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
+                    start_info,
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
-            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='males.xlsx'))
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='Erkaklar.xlsx'))
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed male users as Excel.")
         except Exception as e:
@@ -487,6 +522,9 @@ def register_admin_handlers(dp):
         try:
             conn = sqlite3.connect(DB_PATH, timeout=10)
             users = get_users_by_gender('ayol')
+            months = {"01": "Yanvar", "02": "Fevral", "03": "Mart", "04": "Aprel", "05": "May", "06": "Iyun", "07": "Iyul", "08": "Avgust", "09": "Sentyabr", "10": "Oktyabr", "11": "Noyabr", "12": "Dekabr"}
+            # users = get_all_users()
+    
             logger.info(f"Fetched {len(users)} female users")
             if not users:
                 await callback.message.answer("Ayol foydalanuvchilar yo'q.")
@@ -513,6 +551,15 @@ def register_admin_handlers(dp):
                 cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
+                if user["start_month"]=="NULL":
+                    start_info = "Tanlanmagan" 
+                elif user.get("start_month"):  
+                    month_str, year_str = user["start_month"].split(".")  # masalan "04", "2025"
+                    start_info = f"{months[month_str]} {year_str}"        # "Aprel 2025"
+                elif user.get("start_type") and str(user["start_type"]).strip() not in ("", "None", "0"):
+                    start_info = user["start_type"]    
+                else:
+                    start_info = "Tanlanmagan"  
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -525,11 +572,11 @@ def register_admin_handlers(dp):
                     user['address'],
                     user['course_id'],
                     course_name,
-                    option_map.get(user.get('course_start_option'), "Tanlanmagan")
+                    start_info           
                 ])
             conn.close()
             buf = await generate_users_excel(users_data, columns)
-            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='females.xlsx'))
+            await callback.message.answer_document(document=BufferedInputFile(buf.getvalue(), filename='Ayollar.xlsx'))
             await callback.answer()
             logger.info(f"Admin {callback.from_user.id} viewed female users as Excel.")
         except Exception as e:
@@ -713,24 +760,24 @@ def register_admin_handlers(dp):
                         "✅ Ваш платеж подтвержден. Теперь вы можете приступить к курсу."
                     )
 
-                    # Inline tugmalar bilan qo'shimcha xabar
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
-                                callback_data=f"course_start:begin:{pid}"
-                            ),
-                            InlineKeyboardButton(
-                                text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
-                                callback_data=f"course_start:middle:{pid}"
-                            )
-                        ]
-                    ])
-                    await callback.message.bot.send_message(
-                        user['tg_id'],
-                        "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
-                        reply_markup=keyboard
-                    )
+                    # # Inline tugmalar bilan qo'shimcha xabar
+                    # keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    #     [
+                    #         InlineKeyboardButton(
+                    #             text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
+                    #             callback_data=f"course_start:begin:{pid}"
+                    #         ),
+                    #         InlineKeyboardButton(
+                    #             text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
+                    #             callback_data=f"course_start:middle:{pid}"
+                    #         )
+                    #     ]
+                    # ])
+                    # await callback.message.bot.send_message(
+                    #     user['tg_id'],
+                    #     "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
+                    #     reply_markup=keyboard
+                    # )
                     logger.info(f"Sent approval + course start choice to user {user['tg_id']} for payment {pid}.")
                 except Exception as e:
                     logger.error(f"Error sending approval notification to user {user['tg_id']}: {str(e)}")

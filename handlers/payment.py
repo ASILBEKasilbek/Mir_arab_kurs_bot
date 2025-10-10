@@ -148,24 +148,24 @@ async def register_payment_handlers(dp):
         )
 
         # Inline tugmalar
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
-                    callback_data=f"course_start:begin:{payment_id}"
-                ),
-                InlineKeyboardButton(
-                    text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
-                    callback_data=f"course_start:middle:{payment_id}"
-                )
-            ]
-        ])
+        # keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        #     [
+        #         InlineKeyboardButton(
+        #             text="📅 Boshlash boshidan" if lang == "uz" else "📅 Начать с начала",
+        #             callback_data=f"course_start:begin:{payment_id}"
+        #         ),
+        #         InlineKeyboardButton(
+        #             text="⏩ O'rtadan" if lang == "uz" else "⏩ С середины",
+        #             callback_data=f"course_start:middle:{payment_id}"
+        #         )
+        #     ]
+        # ])
 
-        await bot.send_message(
-            tg_id,
-            "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
-            reply_markup=keyboard
-        )
+        # await bot.send_message(
+        #     tg_id,
+        #     "📌 Kursni qachondan boshlamoqchisiz?" if lang == "uz" else "📌 С какого момента хотите начать курс?",
+        #     reply_markup=keyboard
+        # )
 
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.answer("Tasdiqlandi ✅")

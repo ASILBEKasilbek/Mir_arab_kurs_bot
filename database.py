@@ -105,9 +105,6 @@ def init_db() -> None:
     c.execute("CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)")
 
-    # ---- Kichik migratsiyalar ----
-    # 1) Eski kodda age bo'lgan: endi birth_date ishlatiladi.
-    # Agar mavjud bazada birth_date ustuni bo'lmasa, qo'shib qo'yamiz.
     if not _column_exists(conn, "users", "birth_date"):
         c.execute("ALTER TABLE users ADD COLUMN birth_date TEXT")
 
@@ -418,7 +415,7 @@ def get_users_by_gender(gender: str) -> List[Dict[str, Any]]:
     conn = get_conn()
     rows = conn.execute(
         """
-        SELECT id, tg_id, lang, first_name, last_name, birth_date, gender, phone, address, course_id
+        SELECT id, tg_id, lang, first_name, last_name, birth_date, gender, phone, address, course_id,start_type,start_month
         FROM users
         WHERE gender = ?
         ORDER BY id DESC

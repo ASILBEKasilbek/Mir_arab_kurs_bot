@@ -415,7 +415,7 @@ def get_users_by_gender(gender: str) -> List[Dict[str, Any]]:
     conn = get_conn()
     rows = conn.execute(
         """
-        SELECT id, tg_id, lang, first_name, last_name, birth_date, gender, phone, address, course_id,start_type,start_month
+        SELECT id, tg_id, lang, first_name, last_name, birth_date, gender, phone, address, course_id,start_type,start_month,is_paid
         FROM users
         WHERE gender = ?
         ORDER BY id DESC

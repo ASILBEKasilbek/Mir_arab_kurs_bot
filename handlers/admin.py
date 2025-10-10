@@ -384,12 +384,11 @@ def register_admin_handlers(dp):
                 cur.execute("SELECT name FROM courses WHERE id = ?", (user['course_id'],))
                 course_data = cur.fetchone()
                 course_name = course_data[0] if course_data else "Noma'lum"
-                user["is_paid"]="Yo'q"
+                is_paid="Yo'q"
                 if user["is_paid"]==1:
-                    user["is_paid"]="Ha"
+                    is_paid="Ha"
                 raw_paid_at = user.get("paid_at")   # masalan: "2025-10-10T01:36:50.813312"
                 paid_at_display = ""
-                is_paid = user.get('is_paid', 0)
                 if user["start_month"]=="NULL":
                     start_info = "Tanlanmagan" 
                 elif user.get("start_month"):  
@@ -400,7 +399,7 @@ def register_admin_handlers(dp):
                 else:
                     start_info = "Tanlanmagan"  
 
-                if is_paid and raw_paid_at:
+                if raw_paid_at:
                     try:
                         dt = datetime.fromisoformat(raw_paid_at)  
                         day = str(dt.day).zfill(2)      # "10"
@@ -426,7 +425,7 @@ def register_admin_handlers(dp):
                     user['phone'],
                     user['address'],
                     user['registered_at'],
-                    user['is_paid'],
+                    is_paid,
                     paid_at_display,
                     course_name,
                     start_info
@@ -469,6 +468,7 @@ def register_admin_handlers(dp):
                 'Jins',
                 'Telefon',
                 'Manzil',
+                'To‘lov qilinganmi',
                 'Kurs ID',
                 'Kurs nomi',
                 'Kursni qachondan boshlash'
@@ -487,7 +487,10 @@ def register_admin_handlers(dp):
                 elif user.get("start_type") and str(user["start_type"]).strip() not in ("", "None", "0"):
                     start_info = user["start_type"]    
                 else:
-                    start_info = "Tanlanmagan"  
+                    start_info = "Tanlanmagan" 
+                is_paid="Yo'q"
+                if user["is_paid"]==1:
+                    is_paid="Ha" 
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -498,6 +501,7 @@ def register_admin_handlers(dp):
                     user['gender'],
                     user['phone'],
                     user['address'],
+                    is_paid,
                     user['course_id'],
                     course_name,
                     start_info,
@@ -541,6 +545,7 @@ def register_admin_handlers(dp):
                 'Jins',
                 'Telefon',
                 'Manzil',
+                'To‘lov qilinganmi',
                 'Kurs ID',
                 'Kurs nomi',
                 'Kursni qachondan boshlash'
@@ -559,7 +564,10 @@ def register_admin_handlers(dp):
                 elif user.get("start_type") and str(user["start_type"]).strip() not in ("", "None", "0"):
                     start_info = user["start_type"]    
                 else:
-                    start_info = "Tanlanmagan"  
+                    start_info = "Tanlanmagan" 
+                is_paid="Yo'q"
+                if user["is_paid"]==1:
+                    is_paid="Ha"  
                 users_data.append([
                     user['id'],
                     user['tg_id'],
@@ -570,6 +578,7 @@ def register_admin_handlers(dp):
                     user['gender'],
                     user['phone'],
                     user['address'],
+                    is_paid,
                     user['course_id'],
                     course_name,
                     start_info           

@@ -448,7 +448,6 @@ def register_handlers(dp):
         buttons = []
         for course in courses:
             available = course['joylar_soni']
-            print(course['joylar_soni'],course['limit_count'])
             course_text += (
                 f"📚 *{course['name']}*\n"
                 f"{TRANSLATIONS[lang]['course_description']}: {course['description']}\n"
@@ -617,8 +616,24 @@ def register_handlers(dp):
         months = [start_date.month, (start_date.month % 12) + 1, ((start_date.month + 1) % 12) + 1]
         year = start_date.year
 
+        # Oylarga uzbekcha nom beramiz
+        uz_months = {
+            1: "Yanvar",
+            2: "Fevral",
+            3: "Mart",
+            4: "Aprel",
+            5: "May",
+            6: "Iyun",
+            7: "Iyul",
+            8: "Avgust",
+            9: "Sentyabr",
+            10: "Oktyabr",
+            11: "Noyabr",
+            12: "Dekabr",
+        }
+
         # Inline tugmalar yasaymiz
-        buttons = [(month_name[m], f"month_{m}_{year}") for m in months]
+        buttons = [(uz_months[m], f"month_{m}_{year}") for m in months]
         kb = create_inline_keyboard(buttons, row_width=2)
 
         await callback.message.answer(

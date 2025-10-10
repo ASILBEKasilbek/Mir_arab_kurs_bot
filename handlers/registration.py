@@ -133,7 +133,6 @@ def register_handlers(dp):
                 buttons.append((TRANSLATIONS[lang]["choose_course"], "choose_course"))
             if course_id and not is_paid:
                 buttons.append((f"{TRANSLATIONS[lang]['pay_now']} ({course_display})", f"pay_now:{course_id}"))
-            buttons.append((TRANSLATIONS[lang]["cancel"], "cancel"))
             kb = create_inline_keyboard(buttons)
             await message.answer(
                 TRANSLATIONS[lang]["profile_summary"].format(
